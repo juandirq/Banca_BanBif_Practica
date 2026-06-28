@@ -1,0 +1,408 @@
+﻿====================================================
+ AUDITORIA DE ORDEN FINAL - BANBIF HOMEBANKING
+====================================================
+Fecha: 20260609_163707
+Ruta: C:\Users\Lenovo\Desktop\banbif_homebanking_v2
+
+=== 1. CARPETAS PRINCIPALES DEL ROOT ===
+DIR  | sql
+DIR  | portal-banbif-frontend
+DIR  | portal-banbif-backend
+DIR  | docs
+DIR  | core-financiero-frontend
+DIR  | core-financiero-backend
+DIR  | backups
+DIR  | .vscode
+
+=== 2. ARCHIVOS SUELTOS EN ROOT ===
+OK: No hay archivos sueltos raros en el root.
+
+=== 3. ESTRUCTURA DOCS ===
+PASS | docs/01_documentacion_final existe
+   - ESTRUCTURA_FINAL_RECOMENDADA.md
+   - HISTORIAS_USUARIO_ACTUALIZADAS.md
+   - RESUMEN_FINAL_PROYECTO_BANBIF.md
+   - RESUMEN_FUNCIONAL_FINAL.md
+   - SEPARACION_BACKEND_FRONTEND.md
+PASS | docs/02_modelado_bd existe
+   - MODELO_RELACIONAL_Y_DIMENSIONAL.md
+PASS | docs/03_powerbi existe
+   - VISTAS_POWER_BI.md
+PASS | docs/04_uml_actualizado existe
+   - 01_arquitectura_general.puml
+   - 02_casos_uso_general.puml
+   - 02_flujo_credito_cliente_core.puml
+   - 03_flujo_plin_interoperable.puml
+   - 04_casos_uso_general.puml
+   - 04_flujo_credito_cliente_core.puml
+PASS | docs/05_pruebas_evidencias existe
+   - 03_PRUEBAS_FUNCIONALES.md
+   - ARBOL_PROYECTO_LIMPIO_20260609_163322.txt
+PASS | docs/06_manual_ejecucion existe
+   - COMANDOS_EJECUCION.md
+
+=== 4. DOCUMENTOS CLAVE ESPERADOS ===
+PASS | docs\README_INDICE.md
+PASS | docs\01_documentacion_final\RESUMEN_FUNCIONAL_FINAL.md
+PASS | docs\01_documentacion_final\SEPARACION_BACKEND_FRONTEND.md
+PASS | docs\01_documentacion_final\HISTORIAS_USUARIO_ACTUALIZADAS.md
+PASS | docs\01_documentacion_final\ESTRUCTURA_FINAL_RECOMENDADA.md
+PASS | docs\02_modelado_bd\MODELO_RELACIONAL_Y_DIMENSIONAL.md
+PASS | docs\03_powerbi\VISTAS_POWER_BI.md
+PASS | docs\04_uml_actualizado\01_arquitectura_general.puml
+PASS | docs\04_uml_actualizado\02_casos_uso_general.puml
+PASS | docs\04_uml_actualizado\03_flujo_plin_interoperable.puml
+PASS | docs\04_uml_actualizado\04_flujo_credito_cliente_core.puml
+PASS | docs\06_manual_ejecucion\COMANDOS_EJECUCION.md
+
+=== 5. BACKEND / FRONTEND ESTRUCTURA ===
+PASS | portal-banbif-backend\app\routes
+PASS | portal-banbif-backend\app\services
+PASS | portal-banbif-backend\app\schemas
+PASS | portal-banbif-backend\app\db
+PASS | portal-banbif-frontend\src\pages
+PASS | portal-banbif-frontend\src\components
+PASS | portal-banbif-frontend\src\utils
+PASS | core-financiero-backend\app
+PASS | core-financiero-frontend\src\pages
+
+=== 6. ARCHIVOS BACKEND IMPORTANTES ===
+PASS | portal-banbif-backend\app\services\banking_service.py
+PASS | portal-banbif-backend\app\routes\transfer_routes.py
+PASS | portal-banbif-backend\app\routes\payment_routes.py
+PASS | portal-banbif-backend\app\routes\credit_routes.py
+PASS | portal-banbif-backend\app\schemas\banking_schema.py
+PASS | core-financiero-backend\app\main.py
+
+=== 7. BUSCANDO BACKUPS / TEMPORALES SUELTOS ===
+PASS | No hay backups/temp sueltos fuera de evidencias.
+
+=== 8. BUSCANDO CACHES SUELTOS ===
+REVISAR | Caches encontrados: 13
+   - core-financiero-backend\app\__pycache__
+   - core-financiero-backend\app\core\__pycache__
+   - core-financiero-backend\app\models\__pycache__
+   - core-financiero-backend\app\repositories\__pycache__
+   - core-financiero-backend\app\routes\__pycache__
+   - core-financiero-backend\app\schemas\__pycache__
+   - core-financiero-backend\app\scoring\__pycache__
+   - portal-banbif-backend\app\__pycache__
+   - portal-banbif-backend\app\core\__pycache__
+   - portal-banbif-backend\app\db\__pycache__
+   - portal-banbif-backend\app\routes\__pycache__
+   - portal-banbif-backend\app\schemas\__pycache__
+   - portal-banbif-backend\app\services\__pycache__
+
+=== 9. RESUMEN DE EVIDENCIAS ===
+INFO | docs\05_pruebas_evidencias\salidas | archivos: 7
+INFO | docs\05_pruebas_evidencias\capturas | archivos: 0
+INFO | docs\05_pruebas_evidencias\backups_limpieza | archivos: 1
+INFO | docs\05_pruebas_evidencias\legacy_docs_zip | archivos: 1
+
+=== 10. ARBOL LIMPIO RESUMIDO ===
+.vscode
+backups
+core-financiero-backend
+core-financiero-frontend
+docs
+portal-banbif-backend
+portal-banbif-frontend
+sql
+.vscode\settings.json
+backups\00_limpiezas_seguras
+backups\01_cliente_frontend
+backups\02_cliente_backend
+backups\03_core_frontend
+backups\04_core_backend
+backups\05_snapshots_zip
+backups\06_sql_scripts
+backups\99_otros
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001404
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\core-financiero-backend
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\core-financiero-frontend
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\portal-banbif-backend
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\core-financiero-backend\.venv
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\core-financiero-backend\app
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\core-financiero-backend\app\core
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\core-financiero-backend\app\repositories
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\core-financiero-backend\app\routes
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\core-financiero-backend\app\schemas
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\core-financiero-frontend\src
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\core-financiero-frontend\src\pages
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\core-financiero-frontend\src\services
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\portal-banbif-backend\venv
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\portal-banbif-backend\venv\Lib
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\portal-banbif-backend\venv\Lib\site-packages
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\portal-banbif-backend\venv\Lib\site-packages\cffi
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001413\portal-banbif-backend\venv\Lib\site-packages\cffi\_cffi_errors.h
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\archivos_movidos
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos\diagnostico_limpieza_20260608_001050
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos\diagnostico_limpieza_20260608_001050\01_estructura_sin_pesados.txt
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos\diagnostico_limpieza_20260608_001050\02_carpetas_raiz.txt
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos\diagnostico_limpieza_20260608_001050\03_candidatos_limpieza.txt
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos\diagnostico_limpieza_20260608_001050\05_docs_actuales.txt
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos\diagnostico_limpieza_20260608_001050\06_diagramas_uml.txt
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos\diagnostico_limpieza_20260608_001050\07_sql_actual.txt
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos\diagnostico_limpieza_20260608_001050\08_portal_frontend_src.txt
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos\diagnostico_limpieza_20260608_001050\09_core_frontend_src.txt
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos\diagnostico_limpieza_20260608_001050\10_portal_backend_app.txt
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos\diagnostico_limpieza_20260608_001050\11_core_backend_app.txt
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos\diagnostico_limpieza_20260608_001050\12_git_status_short.txt
+backups\00_limpiezas_seguras\_limpieza_segura_20260608_001557\diagnosticos\diagnostico_limpieza_20260608_001050\14_archivos_raiz.txt
+backups\02_cliente_backend\portal-banbif-backend
+backups\03_core_frontend\core-financiero-frontend
+backups\05_snapshots_zip\antes_20_final_20260606_224907
+backups\05_snapshots_zip\snapshot_20260531_154802
+backups\05_snapshots_zip\antes_20_final_20260606_224907.zip
+backups\05_snapshots_zip\snapshot_20260531_154802.zip
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend
+backups\05_snapshots_zip\antes_20_final_20260606_224907\docs
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend
+backups\05_snapshots_zip\antes_20_final_20260606_224907\sql
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\.env
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\requirements.txt
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\controllers
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\core
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\db
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\models
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\repositories
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\routes
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\rules
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\schemas
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\scoring
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\services
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\database.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\main.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\__init__.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\controllers\README.md
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\models\README.md
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\models\__init__.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\repositories\analyst_repository.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\repositories\credit_repository.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\repositories\__init__.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\routes\auth_routes.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\routes\credit_routes.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\routes\__init__.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\rules\README.md
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\schemas\auth_schema.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\schemas\credit_schema.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\schemas\__init__.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\scoring\credit_scoring.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-backend\app\scoring\__init__.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\public
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\.env.local
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\.gitignore
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\eslint.config.js
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\index.html
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\package-lock.json
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\package.json
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\README.md
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\vite.config.js
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\public\favicon.svg
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\public\icons.svg
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\assets
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\components
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\hooks
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\pages
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\services
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\utils
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\App.css
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\App.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\index.css
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\main.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\components\RiskBadge.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\components\StatCard.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\components\StatusBadge.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\pages\Dashboard.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\pages\Login.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\services\coreApi.js
+backups\05_snapshots_zip\antes_20_final_20260606_224907\core-financiero-frontend\src\utils\format.js
+backups\05_snapshots_zip\antes_20_final_20260606_224907\docs\estructura_entrega_banbif.txt
+backups\05_snapshots_zip\antes_20_final_20260606_224907\docs\estructura_final_banbif.txt
+backups\05_snapshots_zip\antes_20_final_20260606_224907\docs\estructura_limpia_banbif.txt
+backups\05_snapshots_zip\antes_20_final_20260606_224907\docs\ESTRUCTURA_PROYECTO.md
+backups\05_snapshots_zip\antes_20_final_20260606_224907\docs\revision_limpieza_banbif.txt
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\.env
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\check_schema.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\check_user_register.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\fix_created_at_defaults.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\requirements.txt
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\core
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\db
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\routes
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\schemas
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\services
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\main.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\__init__.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\core\config.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\core\security.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\core\__init__.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\db\session.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\db\__init__.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\routes\account_routes.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\routes\ahorros_routes.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\routes\auth_routes.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\routes\credit_routes.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\routes\dashboard_routes.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\routes\payment_routes.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\routes\transfer_routes.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\routes\__init__.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\schemas\auth_schema.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\schemas\banking_schema.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\schemas\__init__.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\services\auth_service.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\services\banking_service.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-backend\app\services\__init__.py
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\index.html
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\package-lock.json
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\package.json
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\components
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\pages
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\services
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\utils
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\App.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\main.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\styles.css
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\components\Layout.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\components\Toast.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\pages\AuthPage.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\pages\CreditsPage.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\pages\PaymentsPage.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\pages\ProfilePage.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\pages\SavingsPage.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\pages\SummaryPage.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\pages\TransfersPage.jsx
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\services\api.js
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\utils\banking.js
+backups\05_snapshots_zip\antes_20_final_20260606_224907\portal-banbif-frontend\src\utils\format.js
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend
+backups\05_snapshots_zip\snapshot_20260531_154802\docs
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-frontend
+backups\05_snapshots_zip\snapshot_20260531_154802\sql
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\.env
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\requirements.txt
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\controllers
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\core
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\db
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\models
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\repositories
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\routes
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\rules
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\schemas
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\scoring
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\services
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\database.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\main.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\__init__.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\controllers\README.md
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\models\README.md
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\models\__init__.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\repositories\analyst_repository.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\repositories\credit_repository.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\repositories\__init__.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\routes\auth_routes.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\routes\credit_routes.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\routes\__init__.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\rules\README.md
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\schemas\auth_schema.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\schemas\credit_schema.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\schemas\__init__.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\scoring\credit_scoring.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-backend\app\scoring\__init__.py
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\public
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\.env.local
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\.gitignore
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\eslint.config.js
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\index.html
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\package-lock.json
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\package.json
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\README.md
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\vite.config.js
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\public\favicon.svg
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\public\icons.svg
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\assets
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\components
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\hooks
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\pages
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\services
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\utils
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\App.css
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\App.jsx
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\index.css
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\main.jsx
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\assets\hero.png
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\assets\react.svg
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\assets\vite.svg
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\components\RiskBadge.jsx
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\components\StatCard.jsx
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\components\StatusBadge.jsx
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\pages\Dashboard.jsx
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\pages\Login.jsx
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\services\coreApi.js
+backups\05_snapshots_zip\snapshot_20260531_154802\core-financiero-frontend\src\utils\format.js
+backups\05_snapshots_zip\snapshot_20260531_154802\docs\estructura_entrega_banbif.txt
+backups\05_snapshots_zip\snapshot_20260531_154802\docs\estructura_final_banbif.txt
+backups\05_snapshots_zip\snapshot_20260531_154802\docs\estructura_limpia_banbif.txt
+backups\05_snapshots_zip\snapshot_20260531_154802\docs\revision_limpieza_banbif.txt
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\venv
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\.env
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\check_schema.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\check_user_register.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\fix_created_at_defaults.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\requirements.txt
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\core
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\db
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\routes
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\schemas
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\services
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\main.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\__init__.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\core\config.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\core\security.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\core\__init__.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\db\session.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\db\__init__.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\routes\account_routes.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\routes\ahorros_routes.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\routes\auth_routes.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\routes\credit_routes.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\routes\dashboard_routes.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\routes\payment_routes.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\routes\transfer_routes.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\routes\__init__.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\schemas\auth_schema.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\schemas\banking_schema.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\schemas\__init__.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\services\auth_service.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\services\banking_service.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\app\services\__init__.py
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\venv\Include
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\venv\Lib
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\venv\Scripts
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\venv\.gitignore
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\venv\pyvenv.cfg
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\venv\Include\site
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\venv\Include\site\python3.13
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\venv\Include\site\python3.13\greenlet
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\venv\Include\site\python3.13\greenlet\greenlet.h
+backups\05_snapshots_zip\snapshot_20260531_154802\portal-banbif-backend\venv\Lib\site-packages
+
+====================================================
+ AUDITORIA TERMINADA
+Reporte generado en:
+C:\Users\Lenovo\Desktop\banbif_homebanking_v2\docs\05_pruebas_evidencias\salidas\AUDITORIA_ORDEN_FINAL_20260609_163707.txt
+====================================================

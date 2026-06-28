@@ -1,0 +1,256 @@
+
+import { money, formatDate } from "../utils/format";
+import { calculateCreditPlan } from "../utils/banking";
+
+export default function CreditsPage({
+  credits,
+  creditForm,
+  setCreditForm,
+  requestCredit,
+  loading,
+}) {
+  const update = (field, value) => setCreditForm({ ...creditForm, [field]: value });
+
+  const PURPOSES_BY_PRODUCT = {
+    "Prestamo Efectivo BanBif": [
+      "Libre disponibilidad",
+      "Compra de producto o servicio",
+      "Salud",
+      "Estudios",
+      "Compra de deuda / consolidacion de deudas",
+      "Gastos personales"
+    ],
+    "Credito Vehicular BanBif": [
+      "Compra de auto nuevo",
+      "Compra de auto usado",
+      "Compra de vehiculo particular"
+    ]
+  };
+
+  const selectedProduct = creditForm.product || "Prestamo Efectivo BanBif";
+  const purposeOptions = PURPOSES_BY_PRODUCT[selectedProduct] || PURPOSES_BY_PRODUCT["Prestamo Efectivo BanBif"];
+  const selectedPurpose = purposeOptions.includes(creditForm.purpose) ? creditForm.purpose : purposeOptions[0];
+
+  const plan = calculateCreditPlan({
+    product: creditForm.product,
+    amount: creditForm.amount,
+    months: creditForm.term_months,
+    monthlyIncome: creditForm.monthly_income,
+    location: creditForm.location,
+    incomeType: creditForm.income_type,
+    incomeCategory: creditForm.income_category,
+    employmentType: creditForm.income_category === "5ta" ? "dependiente" : "independiente",
+    employmentMonths: creditForm.employment_months,
+    maritalStatus: creditForm.marital_status,
+    spouseDocuments: creditForm.spouse_documents,
+    badCreditHistory: creditForm.bad_credit_history,
+  });
+
+  return (
+    <section className="page-stack">
+      <div className="page-title">
+        <span className="section-label">Modulo de creditos</span>
+        <h2>Simulador y solicitud de credito</h2>
+        <p>Simula productos de prestamo BanBif con cuota referencial, requisitos y evaluacion previa.</p>
+      </div>
+
+      <section className="two-columns">
+        <article className="panel">
+          <h2>Nueva solicitud</h2>
+
+          <form className="form" onSubmit={requestCredit}>
+            <label>Producto BanBif</label>
+            <select
+              value={selectedProduct}
+              onChange={(e) => {
+                const product = e.target.value;
+                const options = PURPOSES_BY_PRODUCT[product] || PURPOSES_BY_PRODUCT["Prestamo Efectivo BanBif"];
+                setCreditForm({ ...creditForm, product, purpose: options[0] });
+              }}
+              required
+            >
+              <option>Prestamo Efectivo BanBif</option>
+              <option>Credito Vehicular BanBif</option>
+            </select>
+
+            <label>Monto solicitado</label>
+            <input
+              type="number"
+              value={creditForm.amount}
+              onChange={(e) => update("amount", e.target.value)}
+              placeholder="Ejemplo: 5000"
+              min="1"
+              step="0.01"
+              required
+            />
+
+            <label>Plazo en meses</label>
+            <input
+              type="number"
+              value={creditForm.term_months}
+              onChange={(e) => update("term_months", e.target.value)}
+              placeholder="Meses"
+              min="1"
+              required
+            />
+
+            <label>Ingreso mensual neto</label>
+            <input
+              type="number"
+              value={creditForm.monthly_income}
+              onChange={(e) => update("monthly_income", e.target.value)}
+              placeholder="Ingreso mensual neto"
+              min="1"
+              step="0.01"
+              required
+            />
+
+            <label>Ubicacion</label>
+            <select value={creditForm.location || "Lima"} onChange={(e) => update("location", e.target.value)}>
+              <option>Lima</option>
+              <option>Provincia</option>
+            </select>
+
+            <label>Tipo de ingreso</label>
+            <select value={creditForm.income_type || "fijo"} onChange={(e) => update("income_type", e.target.value)}>
+              <option value="fijo">Ingreso fijo</option>
+              <option value="variable">Ingreso variable</option>
+            </select>
+
+            <label>Fuente de ingresos</label>
+            <select value={creditForm.income_category || "5ta"} onChange={(e) => update("income_category", e.target.value)}>
+              <option value="5ta">Dependiente en planilla - 5ta categoria</option>
+              <option value="4ta">Independiente con recibos por honorarios - 4ta categoria</option>
+              <option value="2da">Rentas de capital - 2da categoria</option>
+              <option value="1ra">Rentas por alquileres - 1ra categoria</option>
+            </select>
+
+            <label>Antiguedad o continuidad de ingresos en meses</label>
+            <input
+              type="number"
+              value={creditForm.employment_months || "12"}
+              onChange={(e) => update("employment_months", e.target.value)}
+              min="0"
+              required
+            />
+
+            <label>Estado civil</label>
+            <select value={creditForm.marital_status || "soltero"} onChange={(e) => update("marital_status", e.target.value)}>
+              <option value="soltero">Soltero</option>
+              <option value="casado">Casado</option>
+            </select>
+
+            {String(creditForm.marital_status || "").toLowerCase() === "casado" && (
+              <>
+                <label>Documentacion del conyuge</label>
+                <select value={creditForm.spouse_documents || "no"} onChange={(e) => update("spouse_documents", e.target.value)}>
+                  <option value="no">No presentada</option>
+                  <option value="si">Presentada</option>
+                </select>
+              </>
+            )}
+            <p className="help-note">
+              La evaluacion en centrales de riesgo no la selecciona el cliente; el banco la valida internamente durante la evaluacion crediticia.
+            </p>
+
+            <label>Proposito del credito</label>
+            <select value={selectedPurpose} onChange={(e) => update("purpose", e.target.value)} required>
+              {purposeOptions.map((purpose) => (
+                <option key={purpose}>{purpose}</option>
+              ))}
+            </select>
+
+            <button className="primary" disabled={loading || !plan.canSubmit}>
+              {loading ? "Registrando..." : plan.canSubmit ? "Solicitar credito" : "No elegible"}
+            </button>
+
+            {!plan.canSubmit && (
+              <p className="help-note warning-note">{plan.recommendation}</p>
+            )}
+          </form>
+        </article>
+
+        <article className="panel">
+          <h2>Simulacion referencial</h2>
+
+          <div className="risk-card">
+            <span>Cuota mensual estimada</span>
+            <strong>{money(plan.monthlyPayment)}</strong>
+            <p>
+              TEA referencial: {(plan.annualRate * 100).toFixed(2)}% | TCEA referencial: {(plan.tceaRate * 100).toFixed(2)}%
+            </p>
+          </div>
+
+          <div className="preview-box">
+            <div>
+              <span>Cuota base</span>
+              <strong>{money(plan.baseMonthlyPayment)}</strong>
+            </div>
+            <div>
+              <span>Seguro desgravamen mensual</span>
+              <strong>{money(plan.monthlyInsurance)}</strong>
+            </div>
+            <div>
+              <span>Total a pagar</span>
+              <strong>{money(plan.totalPayment)}</strong>
+            </div>
+            <div>
+              <span>Intereses y costos aprox.</span>
+              <strong>{money(plan.totalCost)}</strong>
+            </div>
+            <div>
+              <span>Relacion cuota / ingreso</span>
+              <strong>{(plan.debtRatio * 100).toFixed(1)}%</strong>
+            </div>
+            <div>
+              <span>Ingreso minimo requerido</span>
+              <strong>{money(plan.minimumIncome)}</strong>
+            </div>
+            <div>
+              <span>Nivel referencial</span>
+              <strong>{plan.risk}</strong>
+            </div>
+            <div>
+              <span>Resultado preliminar</span>
+              <strong>{plan.decision}</strong>
+            </div>
+          </div>
+
+          <p className={plan.canSubmit ? "help-note" : "help-note warning-note"}>
+            {plan.recommendation}
+          </p>
+
+          <p className="help-note">
+            Documentos segun fuente de ingresos: {plan.requiredDocuments?.join(" | ")}
+          </p>
+
+          <p className="help-note">
+            Simulacion referencial inspirada en informacion publica de BanBif. La aprobacion final depende de evaluacion crediticia, sustento de ingresos, tarifario vigente y verificacion del banco.
+          </p>
+        </article>
+      </section>
+
+      <section className="panel">
+        <h2>Mis solicitudes</h2>
+        <div className="table">
+          {credits.length === 0 ? (
+            <p className="empty">No tienes solicitudes registradas.</p>
+          ) : (
+            credits.map((c) => (
+              <div className="row" key={c.id}>
+                <div>
+                  <strong>{c.product}</strong>
+                  <span>{c.months || c.term_months} meses - {c.purpose} - {formatDate(c.created_at)}</span>
+                </div>
+                <div className="right-info">
+                  <b>{money(c.amount)}</b>
+                  <small>{c.status}</small>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+    </section>
+  );
+}

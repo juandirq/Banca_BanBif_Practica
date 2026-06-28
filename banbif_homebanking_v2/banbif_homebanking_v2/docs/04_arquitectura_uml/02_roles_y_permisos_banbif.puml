@@ -1,0 +1,96 @@
+﻿@startuml
+title Roles y permisos - Core Financiero BanBif
+
+skinparam shadowing false
+left to right direction
+
+actor "Cliente BanBif" as Cliente
+actor "Analista Nivel 1" as N1
+actor "Analista Nivel 2" as N2
+actor "Analista Nivel 3" as N3
+actor "Agencia" as Agencia
+actor "Riesgos" as Riesgos
+actor "Comite de Creditos" as Comite
+actor "Gerencia" as Gerencia
+actor "Admin Core" as Admin
+
+rectangle "Homebanking BanBif" {
+  usecase "Consultar cuentas" as H1
+  usecase "Consultar movimientos" as H2
+  usecase "Solicitar credito" as H3
+  usecase "Ver estado del credito" as H4
+}
+
+rectangle "Evaluacion de creditos" {
+  usecase "Revisar bandeja" as C1
+  usecase "Evaluar credito" as C2
+  usecase "Aprobar o rechazar" as C3
+  usecase "Derivar a nivel superior" as C4
+}
+
+rectangle "Operaciones internas" {
+  usecase "Desembolsar credito" as O1
+  usecase "Generar cronograma" as O2
+  usecase "Resolver Comite" as O3
+  usecase "Consultar indicadores" as O4
+}
+
+rectangle "Recuperaciones" {
+  usecase "Consultar mora" as R1
+  usecase "Registrar gestion" as R2
+  usecase "Judicializar" as R3
+  usecase "Castigar" as R4
+}
+
+rectangle "Administracion" {
+  usecase "Administrar usuarios" as A1
+  usecase "Auditar permisos" as A2
+}
+
+Cliente --> H1
+Cliente --> H2
+Cliente --> H3
+Cliente --> H4
+
+N1 --> C1
+N1 --> C2
+N1 --> C3
+N1 --> C4
+
+N2 --> C1
+N2 --> C2
+N2 --> C3
+N2 --> C4
+
+N3 --> C1
+N3 --> C2
+N3 --> C3
+N3 --> C4
+
+Agencia --> O1
+Agencia --> O2
+
+Comite --> O3
+Gerencia --> O4
+
+Riesgos --> R1
+Riesgos --> R2
+Riesgos --> R3
+Riesgos --> R4
+
+Admin --> A1
+Admin --> A2
+
+note right of C3
+Autonomias:
+N1 hasta S/ 10,000
+N2 hasta S/ 25,000
+N3 hasta S/ 60,000
+end note
+
+note right of R3
+Judicializacion y castigo
+son acciones del rol Riesgos.
+end note
+
+@enduml

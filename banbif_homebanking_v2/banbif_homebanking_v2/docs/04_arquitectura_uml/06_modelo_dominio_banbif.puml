@@ -1,0 +1,116 @@
+﻿@startuml
+title Modelo de dominio - BanBif
+
+skinparam shadowing false
+hide circle
+
+class ClienteBanBif {
+  dni
+  nombres
+  correo
+  telefono
+  direccion
+}
+
+class CuentaAhorros {
+  numeroCuenta
+  moneda
+  saldo
+  estado
+}
+
+class Movimiento {
+  tipoOperacion
+  descripcion
+  monto
+  fecha
+}
+
+class SolicitudCredito {
+  producto
+  proposito
+  monto
+  plazoMeses
+  ingresoMensual
+  tea
+  tcea
+  cuotaEstimada
+  rds
+  score
+  riesgo
+  semaforo
+  seguroDesgravamen
+  rutaAprobacion
+  estado
+}
+
+class AnalistaCredito {
+  dni
+  nombres
+  nivel
+  autonomia
+}
+
+class Agencia {
+  usuario
+  rol
+}
+
+class Desembolso {
+  monto
+  fecha
+  estado
+}
+
+class CronogramaPago {
+  numeroCuota
+  fechaVencimiento
+  capital
+  interes
+  totalCuota
+  estado
+  diasMora
+}
+
+class CasoRecuperacion {
+  diasMora
+  banda
+  montoVencido
+  estado
+}
+
+class GestionCobranza {
+  tipoGestion
+  comentario
+  resultado
+  fecha
+}
+
+ClienteBanBif "1" -- "1..*" CuentaAhorros
+CuentaAhorros "1" -- "0..*" Movimiento
+ClienteBanBif "1" -- "0..*" SolicitudCredito
+SolicitudCredito "1" -- "0..1" Desembolso
+SolicitudCredito "1" -- "1..*" CronogramaPago
+SolicitudCredito "1" -- "0..*" CasoRecuperacion
+CasoRecuperacion "1" -- "0..*" GestionCobranza
+AnalistaCredito "1" -- "0..*" SolicitudCredito : evalua
+Agencia "1" -- "0..*" Desembolso : ejecuta
+
+note right of SolicitudCredito
+Producto:
+Prestamo Efectivo BanBif
+
+Proposito:
+Libre disponibilidad
+
+TEA:
+89.90%
+
+TCEA:
+91.42%
+
+Seguro:
+Con o sin seguro de desgravamen
+end note
+
+@enduml

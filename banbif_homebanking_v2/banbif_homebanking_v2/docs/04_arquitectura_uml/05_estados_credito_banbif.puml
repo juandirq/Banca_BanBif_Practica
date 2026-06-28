@@ -1,0 +1,39 @@
+﻿@startuml
+title Estados del credito BanBif
+
+skinparam shadowing false
+
+[*] --> EnEvaluacion
+
+state EnEvaluacion as "En evaluacion"
+state DerivadoN2 as "Derivado a N2"
+state DerivadoN3 as "Derivado a N3"
+state EnRiesgos as "En Riesgos"
+state EnComite as "En Comite"
+state Aprobado as "Aprobado"
+state Rechazado as "Rechazado"
+state Desembolsado as "Desembolsado"
+state Mora as "En mora"
+state Judicial as "Judicial"
+state Castigo as "Castigo"
+
+EnEvaluacion --> Aprobado : cumple reglas y autonomia
+EnEvaluacion --> Rechazado : no cumple reglas
+EnEvaluacion --> DerivadoN2 : supera autonomia N1
+DerivadoN2 --> Aprobado : N2 aprueba
+DerivadoN2 --> DerivadoN3 : requiere N3
+DerivadoN3 --> Aprobado : N3 aprueba
+DerivadoN3 --> EnComite : caso superior
+EnEvaluacion --> EnRiesgos : riesgo alto
+EnRiesgos --> Aprobado : riesgos autoriza
+EnRiesgos --> Rechazado : riesgos rechaza
+EnComite --> Aprobado : comite aprueba
+EnComite --> Rechazado : comite rechaza
+Aprobado --> Desembolsado : agencia desembolsa
+Desembolsado --> Mora : cuota vencida
+Mora --> Judicial : mora critica
+Judicial --> Castigo : mora mayor a 180 dias
+Rechazado --> [*]
+Castigo --> [*]
+
+@enduml

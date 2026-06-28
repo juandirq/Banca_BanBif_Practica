@@ -1,0 +1,207 @@
+from decimal import Decimal
+
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.routes.auth_routes import get_current_user_id
+from app.schemas.banking_schema import TransferRequest, PlinTransferRequest
+from app.services.banking_service import make_transfer
+
+router = APIRouter(tags=["Transferencias"])
+
+
+def row_to_dict(row) -> dict:
+    return dict(row._mapping) if row else {}
+
+
+def validate_token(token: str):
+    if str(token or "").strip() != "123456":
+        raise HTTPException(status_code=401, detail="Token Digital invalido.")
+
+
+@router.post("/api/transferencias")
+def transfer(
+    payload: TransferRequest,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    return make_transfer(
+        db,
+        user_id,
+        payload.from_account_id,
+        payload.to_account_number,
+        payload.amount,
+        payload.description,
+        payload.token_digital,
+    )
+
+
+
+@router.post("/api/transferencias/plin")
+def transfer_plin_yape(
+    payload: PlinTransferRequest,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    validate_token(payload.token_digital)
+
+    phone = str(payload.phone or "").strip()
+    amount = Decimal(str(payload.amount))
+    amount_float = float(amount)
+
+    if amount < Decimal("1"):
+        raise HTTPException(status_code=400, detail="El monto minimo para PLIN interoperable es S/ 1.00.")
+
+    if amount > Decimal("500"):
+        raise HTTPException(status_code=400, detail="El limite por operacion PLIN interoperable es S/ 500.00.")
+
+    if not phone.isdigit() or len(phone) != 9 or not phone.startswith("9"):
+        raise HTTPException(status_code=400, detail="Ingresa un celular peruano valido: 9 digitos y debe iniciar con 9.")
+
+    origin = db.execute(
+        text("""
+            SELECT *
+            FROM public.account
+            WHERE id = :account_id
+              AND user_id = :user_id
+              AND status = 'Activa'
+            LIMIT 1
+        """),
+        {"account_id": payload.from_account_id, "user_id": user_id},
+    ).fetchone()
+
+    if not origin:
+        raise HTTPException(status_code=404, detail="La cuenta origen no existe o no pertenece al usuario.")
+
+    origin_data = row_to_dict(origin)
+
+    if str(origin_data.get("currency", "PEN")).upper() != "PEN":
+        raise HTTPException(status_code=400, detail="PLIN interoperable solo opera con cuentas en soles.")
+
+    origin_balance = Decimal(str(origin_data.get("balance") or 0))
+
+    if origin_balance < amount:
+        raise HTTPException(status_code=400, detail="Saldo insuficiente para realizar la transferencia PLIN.")
+
+    own_phone = db.execute(
+        text("""
+            SELECT phone
+            FROM public."user"
+            WHERE id = :user_id
+            LIMIT 1
+        """),
+        {"user_id": user_id},
+    ).scalar()
+
+    if str(own_phone or "").strip() == phone:
+        raise HTTPException(status_code=400, detail="No puedes enviarte dinero a tu mismo numero afiliado.")
+
+    daily_sent = db.execute(
+        text("""
+            SELECT COALESCE(SUM(ABS(amount)), 0)
+            FROM public.movement
+            WHERE account_id = :account_id
+              AND amount < 0
+              AND (
+                    operation_type ILIKE '%PLIN%'
+                 OR description ILIKE '%PLIN%'
+              )
+              AND DATE(created_at) = CURRENT_DATE
+        """),
+        {"account_id": origin_data["id"]},
+    ).scalar()
+
+    if Decimal(str(daily_sent or 0)) + amount > Decimal("2000"):
+        raise HTTPException(status_code=400, detail="Superas el limite diario PLIN interoperable de S/ 2000.00.")
+
+    destination = db.execute(
+        text("""
+            SELECT a.*
+            FROM public.account a
+            INNER JOIN public."user" u ON u.id = a.user_id
+            WHERE u.phone = :phone
+              AND a.status = 'Activa'
+              AND a.currency = 'PEN'
+            ORDER BY a.created_at ASC
+            LIMIT 1
+        """),
+        {"phone": phone},
+    ).fetchone()
+
+    destination_data = row_to_dict(destination) if destination else None
+
+    if destination_data and int(destination_data["id"]) == int(origin_data["id"]):
+        raise HTTPException(status_code=400, detail="No puedes transferir a la misma cuenta.")
+
+    try:
+        db.execute(
+            text("""
+                UPDATE public.account
+                SET balance = balance - :amount
+                WHERE id = :account_id
+            """),
+            {"amount": amount_float, "account_id": origin_data["id"]},
+        )
+
+        db.execute(
+            text("""
+                INSERT INTO public.movement
+                (account_id, description, operation_type, amount, created_at)
+                VALUES
+                (:account_id, :description, :operation_type, :amount, :created_at)
+            """),
+            {
+                "account_id": origin_data["id"],
+                "description": f"Envio PLIN interoperable a {phone}",
+                "operation_type": "PLIN enviado",
+                "amount": -amount_float,
+                "created_at": datetime.now(),
+            },
+        )
+
+        credited_inside_system = False
+
+        if destination_data:
+            db.execute(
+                text("""
+                    UPDATE public.account
+                    SET balance = balance + :amount
+                    WHERE id = :account_id
+                """),
+                {"amount": amount_float, "account_id": destination_data["id"]},
+            )
+
+            db.execute(
+                text("""
+                    INSERT INTO public.movement
+                    (account_id, description, operation_type, amount, created_at)
+                    VALUES
+                    (:account_id, :description, :operation_type, :amount, :created_at)
+                """),
+                {
+                    "account_id": destination_data["id"],
+                    "description": "Recepcion PLIN interoperable",
+                    "operation_type": "PLIN recibido",
+                    "amount": amount_float,
+                    "created_at": datetime.now(),
+                },
+            )
+
+            credited_inside_system = True
+
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error interno al procesar PLIN interoperable: {str(e)}")
+
+    return {
+        "message": "Transferencia PLIN interoperable realizada correctamente.",
+        "from_account": origin_data.get("account_number"),
+        "to_phone": phone,
+        "amount": amount_float,
+        "credited_inside_system": credited_inside_system,
+    }

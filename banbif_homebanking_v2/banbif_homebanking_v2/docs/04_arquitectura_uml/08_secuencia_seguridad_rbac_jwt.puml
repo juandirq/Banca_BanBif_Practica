@@ -1,0 +1,54 @@
+﻿@startuml
+title Seguridad JWT y RBAC - BanBif
+
+skinparam shadowing false
+
+actor Usuario
+participant "Frontend" as Front
+participant "Backend FastAPI" as Back
+participant "Validador JWT" as JWT
+participant "Control de Roles" as RBAC
+database "bd_core_financiero" as DB
+
+Usuario -> Front: Ingresa credenciales
+Front -> Back: POST login
+Back -> DB: Validar usuario y clave
+DB --> Back: Usuario y rol
+Back --> Front: Token JWT
+
+Usuario -> Front: Ejecuta accion protegida
+Front -> Back: Request con Bearer Token
+Back -> JWT: Validar token
+
+alt Sin token o token invalido
+  JWT --> Back: Token no valido
+  Back --> Front: 401 Not authenticated
+else Token valido
+  JWT --> Back: Usuario autenticado
+  Back -> RBAC: Validar permiso del rol
+
+  alt Rol no autorizado
+    RBAC --> Back: Acceso denegado
+    Back --> Front: 403 Forbidden
+  else Rol autorizado
+    RBAC --> Back: Acceso permitido
+    Back -> DB: Ejecutar operacion
+    DB --> Back: Resultado
+    Back --> Front: 200 OK
+  end
+end
+
+note right of RBAC
+Roles:
+Cliente
+Analista Nivel 1
+Analista Nivel 2
+Analista Nivel 3
+Agencia
+Riesgos
+Comite
+Gerencia
+Admin Core
+end note
+
+@enduml

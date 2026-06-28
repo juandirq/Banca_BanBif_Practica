@@ -1,0 +1,66 @@
+﻿@startuml
+title Secuencia - Solicitud, evaluacion y desembolso BanBif
+
+skinparam shadowing false
+
+actor "Cliente BanBif" as Cliente
+participant "Homebanking" as Home
+participant "API Homebanking" as ApiHome
+database "bd_core_financiero" as DB
+participant "API Core Financiero" as ApiCore
+actor "Analista" as Analista
+actor "Agencia" as Agencia
+
+== Solicitud del cliente ==
+
+Cliente -> Home: Ingresa con DNI y clave
+Home -> ApiHome: Login cliente
+ApiHome -> DB: Validar credenciales
+DB --> ApiHome: Cliente valido
+ApiHome --> Home: Token cliente
+
+Cliente -> Home: Solicita Prestamo Efectivo BanBif
+Home -> ApiHome: Enviar monto, plazo e ingreso
+ApiHome -> ApiHome: Calcular cuota y RDS
+ApiHome -> ApiHome: Asignar score, riesgo y ruta
+ApiHome -> DB: INSERT creditapplication
+DB --> ApiHome: Solicitud registrada
+ApiHome --> Home: Estado En evaluacion
+
+== Evaluacion interna ==
+
+Analista -> ApiCore: Consultar bandeja
+ApiCore -> DB: SELECT solicitudes segun rol
+DB --> ApiCore: Solicitudes asignadas
+ApiCore --> Analista: Bandeja de creditos
+
+Analista -> ApiCore: Abrir detalle tecnico
+ApiCore -> DB: SELECT cliente, cuenta y credito
+DB --> ApiCore: Datos completos
+ApiCore --> Analista: TEA, TCEA, seguro, cuota, RDS, score y riesgo
+
+Analista -> ApiCore: Aprobar, rechazar o derivar
+ApiCore -> ApiCore: Validar JWT, rol y autonomia
+ApiCore -> DB: UPDATE creditapplication
+DB --> ApiCore: Decision registrada
+
+== Desembolso ==
+
+Agencia -> ApiCore: Desembolsar credito aprobado
+ApiCore -> ApiCore: Validar rol Agencia
+ApiCore -> DB: INSERT credit_disbursement
+ApiCore -> DB: INSERT movement
+ApiCore -> DB: UPDATE account.balance
+ApiCore -> DB: INSERT loan_schedule
+DB --> ApiCore: Desembolso completado
+ApiCore --> Agencia: Confirmacion
+
+== Retorno al Homebanking ==
+
+Cliente -> Home: Consulta cuenta
+Home -> ApiHome: Obtener saldo y movimientos
+ApiHome -> DB: SELECT account + movement
+DB --> ApiHome: Saldo actualizado
+ApiHome --> Home: Muestra desembolso
+
+@enduml

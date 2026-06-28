@@ -1,0 +1,135 @@
+﻿@startuml
+title Modelo de datos resumen - BanBif
+
+skinparam shadowing false
+hide circle
+
+entity "user" as U {
+  * id
+  --
+  document
+  full_name
+  email
+  phone
+  address
+  role
+}
+
+entity "account" as A {
+  * id
+  --
+  user_id
+  account_number
+  account_type
+  currency
+  balance
+}
+
+entity "movement" as M {
+  * id
+  --
+  account_id
+  operation_type
+  description
+  amount
+  created_at
+}
+
+entity "creditapplication" as C {
+  * id
+  --
+  user_id
+  product
+  purpose
+  amount
+  months
+  monthly_income
+  estimated_installment
+  rds_ratio
+  scoring_score
+  risk_level
+  risk_semaphore
+  approval_route
+  status
+  disbursement_status
+}
+
+entity "credit_disbursement" as D {
+  * id
+  --
+  credit_application_id
+  account_id
+  movement_id
+  amount
+  status
+}
+
+entity "loan_schedule" as L {
+  * id
+  --
+  credit_application_id
+  installment_number
+  due_date
+  total_amount
+  paid_amount
+  status
+  days_past_due
+}
+
+entity "recovery_case" as R {
+  * id
+  --
+  credit_application_id
+  user_id
+  overdue_amount
+  days_past_due
+  band
+  status
+}
+
+entity "recovery_action" as RA {
+  * id
+  --
+  recovery_case_id
+  action_type
+  comment
+  result
+}
+
+entity "core_analyst_user" as CU {
+  * id
+  --
+  username
+  full_name
+  role
+  position_name
+}
+
+U ||--o{ A
+A ||--o{ M
+U ||--o{ C
+C ||--o{ D
+A ||--o{ D
+M ||--o{ D
+C ||--o{ L
+C ||--o{ R
+U ||--o{ R
+R ||--o{ RA
+CU ||--o{ RA
+CU ||--o{ D
+
+note right of C
+Credito evaluado:
+Prestamo Efectivo BanBif
+
+Proposito:
+Libre disponibilidad
+
+Evaluacion:
+TEA 89.90%
+TCEA 91.42%
+Seguro de desgravamen
+RDS, score y riesgo
+end note
+
+@enduml

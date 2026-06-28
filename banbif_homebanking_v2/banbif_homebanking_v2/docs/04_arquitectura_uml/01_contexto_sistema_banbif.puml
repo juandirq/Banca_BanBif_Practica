@@ -1,0 +1,65 @@
+﻿@startuml
+title Contexto del sistema - BanBif Homebanking + Core Financiero
+
+skinparam shadowing false
+skinparam componentStyle rectangle
+left to right direction
+
+actor "Cliente BanBif" as Cliente
+actor "Personal interno BanBif" as Interno
+actor "Gerencia BanBif" as Gerencia
+
+rectangle "Canal digital BanBif" {
+  component "Homebanking Cliente\nReact + Vite" as HB
+  component "API Homebanking\nFastAPI" as APIHB
+}
+
+rectangle "Core Financiero BanBif" {
+  component "Core Interno\nReact + Vite" as CORE
+  component "API Core Financiero\nFastAPI" as APICORE
+
+  component "Modulo de Creditos" as Creditos
+  component "Modulo de Desembolsos" as Desembolsos
+  component "Modulo de Recuperaciones" as Recuperaciones
+  component "Modulo de Seguridad\nJWT + RBAC" as Seguridad
+}
+
+database "PostgreSQL\nbd_core_financiero" as DB
+
+rectangle "Analitica BanBif" {
+  component "Dashboard Power BI" as PBI
+}
+
+Cliente --> HB
+HB --> APIHB
+APIHB --> DB
+
+Interno --> CORE
+CORE --> APICORE
+APICORE --> Seguridad
+APICORE --> Creditos
+APICORE --> Desembolsos
+APICORE --> Recuperaciones
+
+Seguridad --> DB
+Creditos --> DB
+Desembolsos --> DB
+Recuperaciones --> DB
+
+Gerencia --> PBI
+PBI --> DB
+
+note bottom of DB
+Base de datos compartida entre Homebanking y Core Financiero.
+
+Producto principal:
+Prestamo Efectivo BanBif
+
+Datos de evaluacion:
+TEA 89.90%
+TCEA 91.42%
+Seguro de desgravamen
+RDS, score, riesgo y ruta de aprobacion.
+end note
+
+@enduml

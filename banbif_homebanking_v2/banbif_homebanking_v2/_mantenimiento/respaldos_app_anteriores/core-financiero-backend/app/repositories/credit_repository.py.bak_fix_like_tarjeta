@@ -1,0 +1,548 @@
+﻿from app.database import get_connection, normalize_row
+
+TABLE_NAME = "creditapplication"
+
+
+def ping_db():
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT current_database() AS base_datos, now() AS fecha_servidor"
+        ).fetchone()
+        return normalize_row(row)
+
+
+def get_credit_columns():
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'creditapplication'
+            ORDER BY ordinal_position
+            """
+        ).fetchall()
+        return [normalize_row(row) for row in rows]
+
+
+def _num(value, default=0):
+    try:
+        if value is None or value == "":
+            return default
+        return float(value)
+    except Exception:
+        return default
+
+
+def _texto_valido(value, invalidos=None):
+    invalidos = invalidos or ["", "SIN EVALUAR", "PENDIENTE", "GRIS", "NULL", "NONE"]
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.upper() in invalidos:
+        return None
+    return text
+
+
+def _calcular_cuota_core(row: dict) -> float:
+    monto = _num(row.get("amount") or row.get("monto") or row.get("monto_solicitado"))
+    plazo = int(_num(row.get("term_months") or row.get("plazo_meses") or row.get("months"), 12))
+
+    if monto <= 0 or plazo <= 0:
+        return 0
+
+    producto = str(row.get("product") or row.get("producto") or "").lower()
+
+    if "vehicular" in producto:
+        tea = 0.3999
+    elif "mype" in producto or "negocio" in producto or "empresa" in producto:
+        tea = 0.55
+    elif "estudio" in producto:
+        tea = 0.45
+    else:
+        tea = 0.899
+
+    tasa_mensual = (1 + tea) ** (1 / 12) - 1
+    factor = (1 + tasa_mensual) ** plazo
+
+    if factor == 1:
+        cuota_base = monto / plazo
+    else:
+        cuota_base = monto * ((tasa_mensual * factor) / (factor - 1))
+
+    seguro = monto * 0.0007
+    return cuota_base + seguro
+
+
+def _ruta_por_politica(score: float, riesgo: str, rds_percent: float, monto: float) -> tuple:
+    riesgo_upper = str(riesgo or "").upper()
+
+    if riesgo_upper == "ALTO" or score < 50 or rds_percent > 40:
+        return "RIESGOS", 7
+
+    if monto > 60000:
+        return "COMITE", 9
+
+    if rds_percent > 30 or score < 80:
+        if monto <= 25000:
+            return "ANALISTA_N3", 3
+        return "COMITE", 9
+
+    if monto <= 10000:
+        return "ANALISTA_N1", 1
+
+    if monto <= 25000:
+        return "ANALISTA_N2", 2
+
+    if monto <= 60000:
+        return "ANALISTA_N3", 3
+
+    return "COMITE", 9
+
+
+def _build_scoring(row: dict) -> dict:
+    monto = _num(row.get("amount") or row.get("monto") or row.get("monto_solicitado"))
+    ingreso = _num(row.get("monthly_income") or row.get("ingreso_mensual") or row.get("income"))
+    cuota = _num(row.get("cuota_estimada") or row.get("monthly_payment"))
+
+    if cuota <= 0:
+        cuota = _calcular_cuota_core(row)
+
+    rds = _num(row.get("rds"))
+    rds_porcentaje = _num(row.get("rds_porcentaje") or row.get("rds_percent"))
+
+    if rds_porcentaje <= 0:
+        if rds > 0:
+            rds_porcentaje = rds * 100 if rds <= 1 else rds
+        elif cuota > 0 and ingreso > 0:
+            rds_porcentaje = (cuota / ingreso) * 100
+
+    if rds <= 0 and rds_porcentaje > 0:
+        rds = rds_porcentaje / 100
+
+    score = _num(row.get("score") or row.get("scoring_score"))
+
+    if score <= 0:
+        score = 70
+
+        if rds_porcentaje <= 25:
+            score += 22
+        elif rds_porcentaje <= 30:
+            score += 18
+        elif rds_porcentaje <= 40:
+            score += 5
+        else:
+            score -= 30
+
+        if monto > 0 and ingreso > 0:
+            ratio_monto_ingreso = monto / ingreso
+
+            if ratio_monto_ingreso <= 6:
+                score += 8
+            elif ratio_monto_ingreso > 12:
+                score -= 12
+
+        score = max(0, min(100, score))
+
+    riesgo_db = _texto_valido(row.get("riesgo") or row.get("risk_level"))
+
+    if riesgo_db:
+        riesgo = riesgo_db.upper()
+    else:
+        if score >= 80 and rds_porcentaje <= 30:
+            riesgo = "BAJO"
+        elif score >= 60 and rds_porcentaje <= 40:
+            riesgo = "MEDIO"
+        else:
+            riesgo = "ALTO"
+
+    semaforo_db = _texto_valido(row.get("semaforo") or row.get("risk_semaphore"))
+
+    if semaforo_db:
+        semaforo = semaforo_db.upper()
+    elif riesgo == "BAJO":
+        semaforo = "VERDE"
+    elif riesgo == "MEDIO":
+        semaforo = "AMARILLO"
+    else:
+        semaforo = "ROJO"
+
+    ruta_db = _texto_valido(row.get("ruta_aprobacion") or row.get("approval_route"))
+    nivel_db = _num(row.get("nivel_requerido") or row.get("required_approval_level"))
+
+    if ruta_db:
+        ruta_aprobacion = ruta_db.upper()
+        nivel_requerido = int(nivel_db or 1)
+    else:
+        ruta_aprobacion, nivel_requerido = _ruta_por_politica(score, riesgo, rds_porcentaje, monto)
+
+    comentario = (
+        row.get("comentario_analista")
+        or row.get("analyst_comment")
+        or "Clasificacion automatica del Core segun score, RDS, monto y politica referencial."
+    )
+
+    return {
+        "score": round(score, 2),
+        "riesgo": riesgo,
+        "semaforo": semaforo,
+        "rds": round(rds, 4),
+        "rds_porcentaje": round(rds_porcentaje, 2),
+        "rds_percent": round(rds_porcentaje, 2),
+        "ruta_aprobacion": ruta_aprobacion,
+        "nivel_requerido": nivel_requerido,
+        "cuota_estimada": round(cuota, 2),
+        "comentario": comentario,
+    }
+
+def _normalize_credit_row(row) -> dict:
+    item = normalize_row(row)
+
+    # Compatibilidad con frontend anterior
+    item["id"] = item.get("solicitud_id")
+    item["user_id"] = item.get("cliente_id")
+    item["product"] = item.get("producto")
+    item["purpose"] = item.get("purpose") or item.get("proposito")
+    item["amount"] = item.get("monto_solicitado")
+    item["months"] = item.get("plazo_meses")
+    item["monthly_income"] = item.get("ingreso_mensual")
+    item["status"] = item.get("estado_credito")
+    item["analyst_comment"] = item.get("comentario_analista")
+    item["created_at"] = item.get("fecha_solicitud")
+
+    # Objeto de evaluaciÃƒÆ’Ã‚Â³n crediticia
+    scoring = _build_scoring(item)
+    item["scoring"] = scoring
+
+    # Propagar clasificacion al nivel principal para que el frontend no muestre PENDIENTE/SIN EVALUAR.
+    item["score"] = scoring.get("score")
+    item["riesgo"] = scoring.get("riesgo")
+    item["semaforo"] = scoring.get("semaforo")
+    item["rds"] = scoring.get("rds")
+    item["rds_porcentaje"] = scoring.get("rds_porcentaje")
+    item["ruta_aprobacion"] = scoring.get("ruta_aprobacion")
+    item["nivel_requerido"] = scoring.get("nivel_requerido")
+    item["cuota_estimada"] = scoring.get("cuota_estimada")
+
+    return item
+
+
+def list_credit_applications():
+    query = """
+        SELECT
+            v.solicitud_id,
+            v.cliente_id,
+            v.cliente_nombre,
+            u.document AS cliente_dni,
+            u.document AS cliente_documento,
+            u.email AS cliente_email,
+            ca.purpose AS purpose,
+            ca.purpose AS proposito,
+            v.producto,
+            v.monto_solicitado,
+            v.plazo_meses,
+            v.ingreso_mensual,
+            v.cuota_estimada,
+            v.rds,
+            v.rds_porcentaje,
+            v.score,
+            v.riesgo,
+            v.semaforo,
+            v.ruta_aprobacion,
+            v.nivel_requerido,
+            v.estado_credito,
+            v.estado_desembolso,
+            v.comentario_analista,
+            v.fecha_solicitud,
+            v.fecha_evaluacion,
+            v.evaluado_por,
+            v.cargo_evaluador,
+            v.autonomia_evaluador,
+            v.anio,
+            v.mes,
+            v.anio_mes
+        FROM vw_pbi_creditos v
+        LEFT JOIN "user" u ON u.id = v.cliente_id
+        LEFT JOIN public.creditapplication ca ON ca.id = v.solicitud_id
+        WHERE LOWER(COALESCE(v.producto, '')) NOT LIKE '%tarjeta%'
+        ORDER BY v.fecha_solicitud DESC, v.solicitud_id DESC
+    """
+
+    with get_connection() as conn:
+        rows = conn.execute(query).fetchall()
+
+    return [_normalize_credit_row(row) for row in rows]
+
+
+def get_credit_application(solicitud_id: str):
+    query = """
+        SELECT
+            v.solicitud_id,
+            v.cliente_id,
+            v.cliente_nombre,
+            u.document AS cliente_dni,
+            u.document AS cliente_documento,
+            u.email AS cliente_email,
+            ca.purpose AS purpose,
+            ca.purpose AS proposito,
+            v.producto,
+            v.monto_solicitado,
+            v.plazo_meses,
+            v.ingreso_mensual,
+            v.cuota_estimada,
+            v.rds,
+            v.rds_porcentaje,
+            v.score,
+            v.riesgo,
+            v.semaforo,
+            v.ruta_aprobacion,
+            v.nivel_requerido,
+            v.estado_credito,
+            v.estado_desembolso,
+            v.comentario_analista,
+            v.fecha_solicitud,
+            v.fecha_evaluacion,
+            v.evaluado_por,
+            v.cargo_evaluador,
+            v.autonomia_evaluador,
+            v.anio,
+            v.mes,
+            v.anio_mes
+        FROM vw_pbi_creditos v
+        LEFT JOIN "user" u ON u.id = v.cliente_id
+        LEFT JOIN public.creditapplication ca ON ca.id = v.solicitud_id
+        WHERE v.solicitud_id = %s
+          AND LOWER(COALESCE(v.producto, '')) NOT LIKE '%tarjeta%'
+        LIMIT 1
+    """
+
+    with get_connection() as conn:
+        row = conn.execute(query, (solicitud_id,)).fetchone()
+
+    if not row:
+        return None
+
+    return _normalize_credit_row(row)
+
+
+def update_credit_decision(solicitud_id: str, nuevo_estado: str, observacion: str | None = None):
+    decision = (nuevo_estado or "").strip().lower()
+
+    estado_final = {
+        "aprobado": "Aprobado",
+        "rechazado": "Rechazado",
+        "comite": "En comite",
+        "en_comite": "En comite"
+    }.get(decision, nuevo_estado)
+
+    with get_connection() as conn:
+        if estado_final == "En comite":
+            row = conn.execute(
+                """
+                UPDATE creditapplication
+                SET
+                    status = %s,
+                    approval_route = 'COMITE',
+                    required_approval_level = 9,
+                    analyst_comment = COALESCE(%s, analyst_comment),
+                    evaluated_at = now()
+                WHERE id = %s
+                RETURNING id
+                """,
+                (estado_final, observacion, solicitud_id)
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                UPDATE creditapplication
+                SET
+                    status = %s,
+                    analyst_comment = COALESCE(%s, analyst_comment),
+                    evaluated_at = now()
+                WHERE id = %s
+                RETURNING id
+                """,
+                (estado_final, observacion, solicitud_id)
+            ).fetchone()
+
+        conn.commit()
+
+    if not row:
+        return None
+
+    return get_credit_application(solicitud_id)
+def db_check():
+    return ping_db()
+
+def disburse_credit_application(solicitud_id: str, disbursed_by: int | None = None):
+    with get_connection() as conn:
+        credit = conn.execute(
+            """
+            SELECT *
+            FROM creditapplication
+            WHERE id = %s
+            FOR UPDATE
+            """,
+            (solicitud_id,)
+        ).fetchone()
+
+        if not credit:
+            return None
+
+        credit_data = normalize_row(credit)
+
+        if credit_data.get("status") != "Aprobado":
+            raise ValueError("Solo se pueden desembolsar solicitudes aprobadas.")
+
+        if credit_data.get("disbursement_status") == "Desembolsado":
+            raise ValueError("La solicitud ya fue desembolsada.")
+
+        account = conn.execute(
+            """
+            SELECT *
+            FROM account
+            WHERE user_id = %s
+              AND status = 'Activa'
+              AND currency = 'PEN'
+            ORDER BY id ASC
+            LIMIT 1
+            FOR UPDATE
+            """,
+            (credit_data["user_id"],)
+        ).fetchone()
+
+        if not account:
+            raise ValueError("El cliente no tiene una cuenta activa en PEN para desembolso.")
+
+        account_data = normalize_row(account)
+        amount = float(credit_data.get("amount") or 0)
+        months = int(credit_data.get("months") or 1)
+        estimated_installment = float(credit_data.get("estimated_installment") or 0)
+
+        if amount <= 0:
+            raise ValueError("El monto del credito no es valido.")
+
+        conn.execute(
+            """
+            UPDATE account
+            SET balance = balance + %s
+            WHERE id = %s
+            """,
+            (amount, account_data["id"])
+        )
+
+        movement = conn.execute(
+            """
+            INSERT INTO movement
+            (account_id, description, operation_type, amount, created_at)
+            VALUES
+            (%s, %s, %s, %s, now())
+            RETURNING id
+            """,
+            (
+                account_data["id"],
+                f"Desembolso de credito #{solicitud_id} - {credit_data.get('product')}",
+                "DESEMBOLSO_CREDITO",
+                amount
+            )
+        ).fetchone()
+
+        movement_data = normalize_row(movement)
+
+        disbursement = conn.execute(
+            """
+            INSERT INTO credit_disbursement
+            (credit_application_id, account_id, movement_id, amount, status, disbursed_by, created_at)
+            VALUES
+            (%s, %s, %s, %s, %s, %s, now())
+            RETURNING id
+            """,
+            (
+                credit_data["id"],
+                account_data["id"],
+                movement_data["id"],
+                amount,
+                "Desembolsado",
+                disbursed_by
+            )
+        ).fetchone()
+
+        existing_schedule = conn.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM loan_schedule
+            WHERE credit_application_id = %s
+            """,
+            (credit_data["id"],)
+        ).fetchone()
+
+        existing_schedule_data = normalize_row(existing_schedule)
+
+        if int(existing_schedule_data.get("total") or 0) == 0:
+            principal = round(amount / months, 2)
+
+            if estimated_installment <= 0:
+                estimated_installment = principal
+
+            interest = round(max(estimated_installment - principal, 0), 2)
+
+            for n in range(1, months + 1):
+                due_date = conn.execute(
+                    """
+                    SELECT (CURRENT_DATE + (%s || ' months')::interval)::date AS due_date
+                    """,
+                    (n,)
+                ).fetchone()
+
+                due_date_data = normalize_row(due_date)
+
+                conn.execute(
+                    """
+                    INSERT INTO loan_schedule
+                    (credit_application_id, installment_number, due_date, principal_amount,
+                     interest_amount, total_amount, paid_amount, status, days_past_due, created_at)
+                    VALUES
+                    (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                    """,
+                    (
+                        credit_data["id"],
+                        n,
+                        due_date_data["due_date"],
+                        principal,
+                        interest,
+                        round(principal + interest, 2),
+                        0,
+                        "Pendiente",
+                        0
+                    )
+                )
+
+        conn.execute(
+            """
+            UPDATE creditapplication
+            SET disbursement_status = 'Desembolsado'
+            WHERE id = %s
+            """,
+            (credit_data["id"],)
+        )
+
+        updated_account = conn.execute(
+            """
+            SELECT *
+            FROM account
+            WHERE id = %s
+            """,
+            (account_data["id"],)
+        ).fetchone()
+
+        conn.commit()
+
+    return {
+        "credit": get_credit_application(solicitud_id),
+        "account": normalize_row(updated_account),
+        "movement_id": movement_data["id"],
+        "disbursement_id": normalize_row(disbursement)["id"],
+        "amount": amount
+    }
+
+

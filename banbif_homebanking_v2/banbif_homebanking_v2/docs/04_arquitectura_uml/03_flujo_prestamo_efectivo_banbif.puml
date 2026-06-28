@@ -1,0 +1,66 @@
+﻿@startuml
+title Flujo de Prestamo Efectivo BanBif
+
+skinparam shadowing false
+
+|Cliente BanBif|
+start
+:Ingresa al Homebanking;
+:Consulta cuentas y movimientos;
+:Solicita Prestamo Efectivo BanBif;
+:Registra monto, plazo e ingreso;
+
+|Homebanking|
+:Valida sesion del cliente;
+:Calcula cuota referencial;
+:Calcula RDS inicial;
+:Registra solicitud en bd_core_financiero;
+
+|Core Financiero|
+:Recibe solicitud en bandeja;
+:Calcula score crediticio;
+:Evalua riesgo;
+:Verifica seguro de desgravamen;
+:Muestra TEA 89.90%;
+:Muestra TCEA 91.42%;
+:Determina ruta de aprobacion;
+
+|Analista N1 / N2 / N3|
+if (Monto dentro de autonomia?) then (Si)
+  if (Cumple reglas de credito?) then (Si)
+    :Aprueba credito;
+  else (No)
+    :Rechaza credito;
+    stop
+  endif
+else (No)
+  :Deriva a nivel superior;
+endif
+
+|Comite / Gerencia|
+if (Requiere instancia superior?) then (Si)
+  :Revisa solicitud;
+  if (Decision favorable?) then (Si)
+    :Aprueba credito;
+  else (No)
+    :Rechaza credito;
+    stop
+  endif
+endif
+
+|Agencia|
+:Verifica credito aprobado;
+:Ejecuta desembolso;
+
+|Core Financiero|
+:Registra desembolso;
+:Genera movimiento;
+:Actualiza saldo;
+:Genera cronograma de pagos;
+
+|Cliente BanBif|
+:Visualiza abono en Homebanking;
+:Consulta cronograma y movimientos;
+
+stop
+@enduml

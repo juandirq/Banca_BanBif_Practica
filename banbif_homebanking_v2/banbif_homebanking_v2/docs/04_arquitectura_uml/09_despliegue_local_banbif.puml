@@ -1,0 +1,36 @@
+﻿@startuml
+title Despliegue local - Sistema BanBif
+
+skinparam shadowing false
+
+node "Equipo local Windows" {
+  node "Navegador" {
+    artifact "Homebanking\nlocalhost:5173" as HBUI
+    artifact "Core Financiero\nlocalhost:5174" as COREUI
+  }
+
+  node "Servicios FastAPI" {
+    artifact "API Homebanking\n127.0.0.1:8000" as HBAPI
+    artifact "API Core\n127.0.0.1:8001" as COREAPI
+  }
+
+  database "PostgreSQL\nbd_core_financiero" as DB
+
+  node "Power BI Desktop" {
+    artifact "Dashboard BanBif" as PBI
+  }
+}
+
+HBUI --> HBAPI : HTTP REST
+COREUI --> COREAPI : HTTP REST
+HBAPI --> DB : SQL
+COREAPI --> DB : SQL
+PBI --> DB : vistas SQL
+
+note bottom of DB
+La misma base mantiene clientes, cuentas,
+movimientos, creditos, desembolsos,
+cronogramas y recuperaciones.
+end note
+
+@enduml

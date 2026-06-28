@@ -1,0 +1,46 @@
+﻿@startuml
+title Recuperaciones y mora - BanBif
+
+skinparam shadowing false
+
+|Sistema|
+start
+:Detecta cuotas vencidas;
+:Calcula dias de mora;
+:Clasifica banda de recuperacion;
+
+if (Existe mora?) then (Si)
+  :Registra o actualiza recovery_case;
+else (No)
+  :Credito continua vigente;
+  stop
+endif
+
+|Riesgos|
+:Consulta cartera morosa;
+:Filtra por banda;
+:Revisa detalle del caso;
+:Registra gestion de cobranza;
+
+if (Cliente regulariza?) then (Si)
+  :Registra resultado favorable;
+  stop
+else (No)
+  if (Dias de mora >= 121?) then (Si)
+    :Judicializa caso;
+    :Registra accion en recovery_action;
+  else (No)
+    :Mantiene gestion intensiva;
+    stop
+  endif
+endif
+
+if (Dias de mora > 180?) then (Si)
+  :Castiga caso;
+  :Registra accion de castigo;
+else (No)
+  :Continua seguimiento judicial;
+endif
+
+stop
+@enduml

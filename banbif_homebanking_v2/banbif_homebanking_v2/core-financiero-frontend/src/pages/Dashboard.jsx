@@ -1,0 +1,3018 @@
+﻿import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Building2,
+  CheckCircle,
+  ClipboardList,
+  Gauge,
+  LogOut,
+  RefreshCcw,
+  Search,
+  ShieldCheck,
+  UserCheck,
+  XCircle
+} from "lucide-react";
+
+import {
+  getSolicitudes,
+  tomarDecision,
+  desembolsarSolicitud,
+  getResumenRecuperaciones,
+  getCarteraRecuperaciones,
+  getGestionesRecuperacion,
+  registrarGestionRecuperacion,
+  derivarCasoJudicial,
+  castigarCasoRecuperacion
+} from "../services/coreApi";
+import { formatDate, formatMoney } from "../utils/format";
+import StatCard from "../components/StatCard";
+import RiskBadge from "../components/RiskBadge";
+import StatusBadge from "../components/StatusBadge";
+
+
+
+function toRoleKey(value) {
+  const text = String(value || "")
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (text.includes("ANALISTA_N1") || text.includes("ANALISTA NIVEL 1") || text.includes("CREDITOS NIVEL 1")) return "ANALISTA_N1";
+  if (text.includes("ANALISTA_N2") || text.includes("ANALISTA NIVEL 2") || text.includes("CREDITOS NIVEL 2")) return "ANALISTA_N2";
+  if (text.includes("ANALISTA_N3") || text.includes("ANALISTA NIVEL 3") || text.includes("CREDITOS NIVEL 3")) return "ANALISTA_N3";
+  if (text.includes("ANALISTA_N4") || text.includes("ANALISTA NIVEL 4") || text.includes("CREDITOS NIVEL 4")) return "ANALISTA_N4";
+  if (text.includes("SENIOR")) return "SENIOR_CREDITOS";
+  if (text.includes("ADMIN_AGENCIA") || text.includes("ADMINISTRADOR DE AGENCIA")) return "ADMIN_AGENCIA";
+  if (text.includes("RIESGOS")) return "RIESGOS";
+  if (text.includes("GERENCIA")) return "GERENCIA";
+  if (text.includes("COMITE")) return "COMITE";
+  if (text.includes("ADMIN")) return "ADMIN";
+
+  return text;
+}
+function getRoleLabel(role) {
+  const value = String(role || "").toUpperCase();
+
+  const map = {
+    ANALISTA_N1: "Analista de Creditos Nivel 1",
+    ANALISTA_N2: "Analista de Creditos Nivel 2",
+    ANALISTA_N3: "Analista de Creditos Nivel 3",
+    ANALISTA_N4: "Analista de Creditos Nivel 4",
+    SENIOR_CREDITOS: "Analista Senior de Creditos",
+    ADMIN_AGENCIA: "Administrador de Agencia",
+    RIESGOS: "Especialista de Riesgos Crediticios",
+    GERENCIA: "Gerencia de Finanzas",
+    COMITE: "Comite de Creditos",
+    ADMIN: "Administrador del Sistema"
+  };
+
+  return map[value] || "Usuario interno";
+}
+function normalize(value) {
+  return String(value || "").toLowerCase();
+}
+
+function isFinalStatus(status) {
+  const value = normalize(status);
+  return value.includes("aprobado") || value.includes("rechazado");
+}
+
+function isCommitteeStatus(status) {
+  return normalize(status).includes("comite");
+}
+
+function getClientDocumentLabel(solicitud) {
+  const documento =
+    solicitud?.cliente_dni ||
+    solicitud?.cliente_documento ||
+    solicitud?.documento ||
+    solicitud?.document ||
+    solicitud?.dni;
+
+  return documento
+    ? `DNI ${documento}`
+    : `Cliente interno #${solicitud?.user_id || solicitud?.cliente_id || "-"}`;
+}
+
+function getClientName(solicitud) {
+  return (
+    solicitud?.client_name ||
+    solicitud?.cliente_nombre ||
+    solicitud?.full_name ||
+    solicitud?.nombre_cliente ||
+    solicitud?.user?.full_name ||
+    solicitud?.user?.name ||
+    "Cliente sin nombre"
+  );
+}
+function getApprovedSubtitle(resumen) {
+  const pendientes = Math.max((resumen.aprobadas || 0) - (resumen.desembolsadas || 0), 0);
+  return `${resumen.desembolsadas} desembolsadas - ${pendientes} pendiente`;
+}
+
+function StatusMini({ label, value }) {
+  return (
+    <div className="mini-stat">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+
+
+function getRoleLevel(role) {
+  const value = String(role || "").toUpperCase();
+
+  const map = {
+    ANALISTA_N1: 1,
+    ANALISTA_N2: 2,
+    ANALISTA_N3: 3,
+    ANALISTA_N4: 4,
+    SENIOR_CREDITOS: 5,
+    ADMIN_AGENCIA: 6,
+    RIESGOS: 7,
+    GERENCIA: 8,
+    COMITE: 9,
+    ADMIN: 0
+  };
+
+  return map[value] || 1;
+}
+
+function getRuta(solicitud) {
+  return (
+    solicitud?.ruta_aprobacion ||
+    solicitud?.scoring?.ruta_aprobacion ||
+    solicitud?.area_responsable ||
+    solicitud?.route ||
+    "PENDIENTE"
+  );
+}
+
+function getRdsPercent(solicitud) {
+  const scoring = solicitud?.scoring || {};
+
+  if (scoring.rds_percent !== undefined && scoring.rds_percent !== null) {
+    return Number(scoring.rds_percent) || 0;
+  }
+
+  if (scoring.rds !== undefined && scoring.rds !== null) {
+    const value = Number(scoring.rds) || 0;
+    return value <= 1 ? value * 100 : value;
+  }
+
+  if (solicitud?.rds !== undefined && solicitud?.rds !== null) {
+    const value = Number(solicitud.rds) || 0;
+    return value <= 1 ? value * 100 : value;
+  }
+
+  const cuota = Number(scoring.cuota_estimada || solicitud?.cuota_estimada || 0);
+  const ingreso = Number(solicitud?.monthly_income || solicitud?.income || solicitud?.ingreso_mensual || 0);
+
+  if (cuota > 0 && ingreso > 0) {
+    return (cuota / ingreso) * 100;
+  }
+
+  return 0;
+}
+
+function getRoleLimit(role) {
+  const value = toRoleKey(role);
+
+  const map = {
+    ANALISTA_N1: 10000,
+    ANALISTA_N2: 25000,
+    ANALISTA_N3: 60000,
+    ANALISTA_N4: 100000,
+    SENIOR_CREDITOS: 150000,
+    ADMIN_AGENCIA: 200000,
+    RIESGOS: 100000,
+    GERENCIA: 999999999,
+    COMITE: 999999999,
+    ADMIN: 0
+  };
+
+  return map[value] || 3000;
+}
+function getRouteLabel(route) {
+  const value = String(route || "").toUpperCase();
+
+  const map = {
+    ANALISTA_N1: "Analista Nivel 1",
+    ANALISTA_N2: "Analista Nivel 2",
+    ANALISTA_N3: "Analista Nivel 3",
+    ANALISTA_N4: "Analista Nivel 4",
+    SENIOR_CREDITOS: "Senior de Creditos",
+    ADMIN_AGENCIA: "Administrador de Agencia",
+    RIESGOS: "Area de Riesgos",
+    GERENCIA: "Gerencia",
+    COMITE: "Comite de Creditos",
+    PENDIENTE: "Pendiente de evaluacion"
+  };
+
+  return map[value] || route || "Pendiente de evaluacion";
+}
+
+function getCuotaEstimada(solicitud) {
+  const scoring = solicitud?.scoring || {};
+
+  if (scoring.cuota_estimada !== undefined && scoring.cuota_estimada !== null) {
+    return Number(scoring.cuota_estimada) || 0;
+  }
+
+  if (solicitud?.cuota_estimada !== undefined && solicitud?.cuota_estimada !== null) {
+    return Number(solicitud.cuota_estimada) || 0;
+  }
+
+  const monto = Number(solicitud?.amount || 0);
+  const plazo = Number(solicitud?.term_months || solicitud?.plazo_meses || 12);
+
+  if (monto <= 0 || plazo <= 0) return 0;
+
+  return monto / plazo;
+}
+
+
+
+
+function safeGetNivelRequerido(solicitud) {
+  return Number(
+    solicitud?.nivel_requerido ||
+    solicitud?.scoring?.nivel_requerido ||
+    1
+  );
+}
+
+function getDecisionPolicy(solicitud = {}) {
+  const status = normalize(solicitud?.status || solicitud?.estado_credito || "");
+  const monto = Number(solicitud?.amount || solicitud?.monto_solicitado || 0);
+  const ingreso = Number(solicitud?.monthly_income || solicitud?.ingreso_mensual || 0);
+  const cuota = Number(getCuotaEstimada(solicitud) || solicitud?.cuota_estimada || solicitud?.estimated_installment || 0);
+  const score = Number(solicitud?.score || solicitud?.scoring_score || solicitud?.scoring?.score || 0);
+  const rds = Number(getRdsPercent(solicitud) || 0);
+  const riesgo = normalize(solicitud?.riesgo || solicitud?.risk_level || solicitud?.scoring?.riesgo || "");
+
+  let routeKey = "ANALISTA_N1";
+  let nivel = 1;
+  let recommendation = "APROBAR";
+  let instancia = "Analista Nivel 1";
+  let motivo = "Aprobar porque el monto, score, RDS y capacidad de pago estan dentro de la autonomia del Analista Nivel 1.";
+
+  if (status.includes("aprobado")) {
+    routeKey = toRoleKey(getRuta(solicitud)) || "ANALISTA_N1";
+    return {
+      recommendation: "APROBADO",
+      routeKey,
+      nivel: safeGetNivelRequerido(solicitud),
+      instancia: formatCoreAreaLabel(routeKey),
+      motivo: "La solicitud ya fue aprobada. Continuar con seguimiento y desembolso si corresponde."
+    };
+  }
+
+  if (status.includes("rechazado")) {
+    routeKey = toRoleKey(getRuta(solicitud)) || "ANALISTA_N1";
+    return {
+      recommendation: "RECHAZADO",
+      routeKey,
+      nivel: safeGetNivelRequerido(solicitud),
+      instancia: formatCoreAreaLabel(routeKey),
+      motivo: "La solicitud ya fue rechazada. Revisar el sustento registrado por el analista."
+    };
+  }
+
+  if (status.includes("comite")) {
+    return {
+      recommendation: "EN COMITE",
+      routeKey: "COMITE",
+      nivel: 9,
+      instancia: "Comite de Creditos",
+      motivo: "La solicitud ya fue derivada a Comite de Creditos por politica interna."
+    };
+  }
+
+  if (cuota > ingreso && ingreso > 0) {
+    routeKey = "RIESGOS";
+    nivel = 7;
+    recommendation = "RECHAZAR";
+    instancia = "Area de Riesgos";
+    motivo = `Rechazar porque la cuota estimada de ${formatMoney(cuota)} supera el ingreso mensual declarado de ${formatMoney(ingreso)}.`;
+  } else if (rds > 60) {
+    routeKey = "RIESGOS";
+    nivel = 7;
+    recommendation = "RECHAZAR";
+    instancia = "Area de Riesgos";
+    motivo = `Rechazar porque el RDS es ${rds.toFixed(2)}%, muy por encima del limite operativo permitido.`;
+  } else if (riesgo.includes("alto") || score < 50 || rds > 40) {
+    routeKey = "RIESGOS";
+    nivel = 7;
+    recommendation = "DERIVAR A RIESGOS";
+    instancia = "Area de Riesgos";
+    motivo = `Derivar a Riesgos porque el score es ${score}/100, el RDS es ${rds.toFixed(2)}% y el perfil requiere revision especializada.`;
+  } else if (monto > 60000) {
+    routeKey = "COMITE";
+    nivel = 9;
+    recommendation = "DERIVAR A COMITE";
+    instancia = "Comite de Creditos";
+    motivo = `Derivar a Comite porque el monto solicitado de ${formatMoney(monto)} supera S/ 60000 y requiere decision colegiada.`;
+  } else if (rds > 30 || score < 80) {
+    if (monto <= 25000) {
+      routeKey = "ANALISTA_N3";
+      nivel = 3;
+      recommendation = "DERIVAR A ANALISTA N3";
+      instancia = "Analista Nivel 3";
+      motivo = `Derivar a Analista Nivel 3 porque el score es ${score}/100 y el RDS es ${rds.toFixed(2)}%, por lo que requiere revision superior al Nivel 1.`;
+    } else {
+      routeKey = "COMITE";
+      nivel = 9;
+      recommendation = "DERIVAR A COMITE";
+      instancia = "Comite de Creditos";
+      motivo = `Derivar a Comite porque el monto de ${formatMoney(monto)}, score ${score}/100 y RDS ${rds.toFixed(2)}% superan la autonomia individual.`;
+    }
+  } else if (monto <= 10000) {
+    routeKey = "ANALISTA_N1";
+    nivel = 1;
+    recommendation = "APROBAR";
+    instancia = "Analista Nivel 1";
+    motivo = `Aprobar porque el monto de ${formatMoney(monto)} esta dentro de la autonomia N1 de S/ 10000, el score es ${score}/100 y el RDS es ${rds.toFixed(2)}%.`;
+  } else if (monto <= 25000) {
+    routeKey = "ANALISTA_N2";
+    nivel = 2;
+    recommendation = "DERIVAR A ANALISTA N2";
+    instancia = "Analista Nivel 2";
+    motivo = `Derivar a Analista Nivel 2 porque el monto de ${formatMoney(monto)} supera la autonomia N1 de S/ 10000.`;
+  } else if (monto <= 60000) {
+    routeKey = "ANALISTA_N3";
+    nivel = 3;
+    recommendation = "DERIVAR A ANALISTA N3";
+    instancia = "Analista Nivel 3";
+    motivo = `Derivar a Analista Nivel 3 porque el monto de ${formatMoney(monto)} supera la autonomia N2 de S/ 25000.`;
+  }
+
+  return { recommendation, routeKey, nivel, instancia, motivo };
+}
+
+function safeGetRecommendation(solicitud) {
+  return getDecisionPolicy(solicitud).recommendation;
+}
+
+function getRecommendationLabel(solicitud) {
+  return safeGetRecommendation(solicitud);
+}
+
+function safeCanDecide(solicitud, role) {
+  const status = normalize(solicitud?.status || solicitud?.estado_credito || "");
+  const roleActual = toRoleKey(role);
+  const policy = getDecisionPolicy(solicitud);
+  const rutaSolicitud = policy.routeKey;
+  const monto = Number(solicitud?.amount || solicitud?.monto_solicitado || 0);
+  const limite = getRoleLimit(roleActual);
+
+  if (status.includes("aprobado")) return false;
+  if (status.includes("rechazado")) return false;
+  if (status.includes("comite")) return false;
+  if (roleActual === "ADMIN") return false;
+
+  if (rutaSolicitud === "RIESGOS") {
+    return roleActual === "RIESGOS";
+  }
+
+  if (rutaSolicitud === "COMITE") {
+    return roleActual === "COMITE" || roleActual === "GERENCIA";
+  }
+
+  if (roleActual === rutaSolicitud && monto <= limite) {
+    return true;
+  }
+
+  return false;
+}
+
+function canDecide(solicitud, role) {
+  return safeCanDecide(solicitud, role);
+}
+
+function getNivelRequerido(solicitud) {
+  return getDecisionPolicy(solicitud).instancia;
+}
+
+function getApprovalLevelDisplay(solicitud) {
+  const policy = getDecisionPolicy(solicitud);
+
+  if (policy.routeKey === "RIESGOS") {
+    return "Area de Riesgos";
+  }
+
+  if (policy.routeKey === "COMITE") {
+    return "Comite de Creditos";
+  }
+
+  return policy.instancia || "Pendiente de evaluacion";
+}
+
+function getAuthorityLimitDisplay(solicitud) {
+  const ruta = toRoleKey(getRuta(solicitud));
+
+  if (ruta === "COMITE") return "Decision colegiada";
+  if (ruta === "RIESGOS") return "Segun politica de riesgos";
+  if (ruta === "GERENCIA") return "Segun aprobacion gerencial";
+  if (ruta === "ADMIN") return "Administracion del sistema";
+
+  return formatMoney(getRoleLimit(ruta));
+}
+
+function getMoraInfo(solicitud, index = 0) {
+  const status = normalize(solicitud?.status);
+  const riesgo = normalize(solicitud?.scoring?.riesgo);
+  const rds = getRdsPercent(solicitud);
+  const monto = Number(solicitud?.amount || 0);
+
+  let dias = Number(solicitud?.dias_mora || solicitud?.days_overdue || 0);
+
+  if (!dias) {
+    if (status.includes("rechazado") || riesgo.includes("alto")) dias = 65 + index;
+    else if (rds >= 35) dias = 32 + index;
+    else if (rds >= 25) dias = 14 + index;
+    else dias = 0;
+  }
+
+  let nivel = "Sin mora";
+  let accion = "Seguimiento normal de cartera";
+  let estadoGestion = "Al dia";
+  let saldoVencido = 0;
+
+  if (dias > 0 && dias <= 15) {
+    nivel = "Mora preventiva";
+    accion = "Enviar recordatorio preventivo";
+    estadoGestion = "Pendiente";
+    saldoVencido = monto * 0.04;
+  } else if (dias > 15 && dias <= 30) {
+    nivel = "Mora temprana";
+    accion = "Llamada de cobranza y compromiso de pago";
+    estadoGestion = "En gestion";
+    saldoVencido = monto * 0.08;
+  } else if (dias > 30 && dias <= 60) {
+    nivel = "Mora media";
+    accion = "Negociar reprogramacion o plan de pago";
+    estadoGestion = "Gestion intensiva";
+    saldoVencido = monto * 0.14;
+  } else if (dias > 60) {
+    nivel = "Mora critica";
+    accion = "Escalar a recuperacion especializada";
+    estadoGestion = "Escalado";
+    saldoVencido = monto * 0.22;
+  }
+
+  return {
+    dias,
+    nivel,
+    accion,
+    estadoGestion,
+    saldoVencido
+  };
+}
+
+
+function cleanDetailValue(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/\.$/, "")
+    .trim();
+}
+
+function getTechnicalField(rawValue, label) {
+  const raw = cleanDetailValue(rawValue);
+
+  const labels = [
+    "Cliente",
+    "DNI",
+    "Correo",
+    "Celular",
+    "Producto",
+    "TEA referencial",
+    "TCEA referencial",
+    "Cuota estimada",
+    "Seguro desgravamen mensual estimado",
+    "Total a pagar",
+    "RDS",
+    "Ubicacion",
+    "Tipo ingreso",
+    "Categoria",
+    "Situacion laboral",
+    "Antiguedad meses",
+    "Estado civil",
+    "Central de riesgo",
+    "Documentos requeridos",
+    "Riesgo referencial",
+    "Recomendacion del sistema",
+    "Motivo calculado por el sistema",
+    "Ruta sugerida",
+  ];
+
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const nextLabels = labels
+    .filter((item) => item !== label)
+    .map((item) => item.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+
+  const regex = new RegExp(`${escapedLabel}:\\s*(.*?)(?=\\s+(?:${nextLabels}):|$)`, "i");
+  const match = raw.match(regex);
+
+  return match ? cleanDetailValue(match[1]) : "";
+}
+
+function DetailItem({ label, value }) {
+  if (!value) return null;
+
+  return (
+    <div
+      style={{
+        padding: "10px 12px",
+        border: "1px solid #dbe7f6",
+        borderRadius: 14,
+        background: "#ffffff",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "0.72rem",
+          color: "#64748b",
+          fontWeight: 800,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: "0.95rem",
+          color: "#0f172a",
+          fontWeight: 800,
+          lineHeight: 1.35,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function DetailSection({ title, children }) {
+  return (
+    <div
+      style={{
+        border: "1px solid #dbe7f6",
+        borderRadius: 18,
+        padding: 14,
+        background: "#f8fbff",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "0.78rem",
+          color: "#0b4ea2",
+          fontWeight: 900,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          marginBottom: 10,
+        }}
+      >
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function renderTechnicalDetail(value, solicitud = {}) {
+  const raw = typeof value === "string" ? value : "";
+
+  const labels = [
+    "Datos del titular",
+    "Cliente",
+    "DNI",
+    "Correo",
+    "Celular",
+    "Producto",
+    "Proposito",
+    "Seguro de desgravamen",
+    "Ubicacion",
+    "Tipo ingreso",
+    "Categoria",
+    "Situacion laboral",
+    "Antiguedad meses",
+    "Estado civil",
+    "Central de riesgo",
+    "Documentos requeridos",
+    "TEA referencial",
+    "TCEA referencial",
+    "Cuota estimada",
+    "RDS",
+    "Total a pagar",
+    "Riesgo referencial",
+    "Motivo de recomendacion",
+    "Motivo calculado por el sistema",
+    "Ruta sugerida"
+  ];
+
+  const escapeRegExp = (text) => String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  const pick = (label, fallback = "No registrado") => {
+    const current = escapeRegExp(label);
+    const nextLabels = labels
+      .filter((item) => item !== label)
+      .map(escapeRegExp)
+      .join("|");
+
+    const pattern = new RegExp(`${current}\\s*:\\s*([\\s\\S]*?)(?=\\s+(?:${nextLabels})\\s*:|$)`, "i");
+    const match = raw.match(pattern);
+    const value = match?.[1]?.replace(/\s+/g, " ").trim();
+
+    return value || fallback;
+  };
+
+  const cliente = getClientName(solicitud) || pick("Cliente");
+  const campoSolicitud = (...keys) => {
+    for (const key of keys) {
+      const value = solicitud?.[key];
+      if (value !== undefined && value !== null && String(value).trim() !== "") {
+        return String(value).trim();
+      }
+    }
+    return null;
+  };
+
+  
+  const textoAnalistaCredito = String(
+    solicitud?.analyst_comment ||
+    solicitud?.comentario_analista ||
+    solicitud?.observacion ||
+    ""
+  );
+
+  const limpiarValorCredito = (valor) => {
+    if (valor === undefined || valor === null) return null;
+    const limpio = String(valor)
+      .replace(/\s+/g, " ")
+      .replace(/\.$/, "")
+      .trim();
+
+    if (!limpio || limpio.toLowerCase() === "null" || limpio.toLowerCase() === "undefined") {
+      return null;
+    }
+
+    return limpio;
+  };
+
+  const campoExactoCredito = (...keys) => {
+    for (const key of keys) {
+      const value = limpiarValorCredito(solicitud?.[key]);
+      if (value) return value;
+    }
+    return null;
+  };
+
+  const pickExactCredito = (label, fallback = null) => {
+    const labels = [
+      "Cliente",
+      "DNI",
+      "Correo",
+      "Celular",
+      "Ubicacion",
+      "Tipo de ingreso",
+      "Categoria de renta",
+      "Situacion laboral",
+      "Antiguedad meses",
+      "Estado civil",
+      "Seguro de desgravamen",
+      "Central de riesgo",
+      "TEA referencial",
+      "TCEA referencial",
+      "Cuota estimada",
+      "Total a pagar",
+      "RDS",
+      "Riesgo referencial",
+      "Finalidad declarada",
+      "Documentos requeridos"
+    ];
+
+    const escapeRegex = (txt) => txt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const etiqueta = escapeRegex(label);
+    const otras = labels
+      .filter((item) => item !== label)
+      .map(escapeRegex)
+      .join("|");
+
+    const patron = new RegExp(`${etiqueta}\\s*:\\s*([\\s\\S]*?)(?=\\.\\s*(?:${otras})\\s*:|$)`, "i");
+    const match = textoAnalistaCredito.match(patron);
+
+    return limpiarValorCredito(match?.[1]) || fallback;
+  };
+
+const dni = pick("DNI", solicitud?.cliente_dni || solicitud?.cliente_documento || solicitud?.document || "No registrado");
+  const correo = solicitud?.cliente_email || solicitud?.email || pick("Correo");
+  const direccionTitular = campoExactoCredito("direccion_titular", "cliente_direccion", "address", "direccion", "client_address") || pickExactCredito("Direccion registrada") || pickExactCredito("Dirección registrada") || "No registrado";
+  const ubicacion = campoExactoCredito("ubicacion", "location", "direccion", "address") || pickExactCredito("Ubicacion") || "No registrado";
+  const tipoIngreso = campoExactoCredito("tipo_ingreso", "income_type") || pickExactCredito("Tipo de ingreso") || "No registrado";
+  const categoria = campoExactoCredito("categoria_renta", "income_category") || pickExactCredito("Categoria de renta") || "No registrado";
+  const situacionLaboral = campoExactoCredito("situacion_laboral", "employment_type") || pickExactCredito("Situacion laboral") || "No registrado";
+  const antiguedadCampo = campoSolicitud("antiguedad") || (campoSolicitud("employment_months") ? `${campoSolicitud("employment_months")} meses` : null);
+  const antiguedad = campoExactoCredito("antiguedad") || (campoExactoCredito("employment_months") ? `${campoExactoCredito("employment_months")} meses` : null) || pickExactCredito("Antiguedad meses") || "No registrado";
+  const estadoCivil = campoExactoCredito("estado_civil", "marital_status") || pickExactCredito("Estado civil") || "No registrado";
+  const centralRiesgo = campoExactoCredito("central_de_riesgo", "central_risk", "central_riesgo") || pickExactCredito("Central de riesgo") || "Pendiente de validacion interna";
+  const seguroDesgravamenEstimado = pick("Seguro desgravamen mensual estimado", "");
+  const seguroDesgravamenBase = pick("Seguro de desgravamen", "");
+  const seguroDesgravamen =
+    seguroDesgravamenBase && !seguroDesgravamenBase.toLowerCase().includes("no registrado")
+      ? seguroDesgravamenBase
+      : seguroDesgravamenEstimado
+        ? `Estimado mensual: ${seguroDesgravamenEstimado} - calculado por sistema`
+        : "Incluido en cuota - calculado por sistema";
+
+  const documentos = pick("Documentos requeridos", "")
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const tea = pick("TEA referencial", "89.90%");
+  const tcea = pick("TCEA referencial", "91.42%");
+  const cuota = pick("Cuota estimada", formatMoney(getCuotaEstimada(solicitud)));
+  const rds = pick("RDS", `${getRdsPercent(solicitud).toFixed(2)}%`);
+  const total = pick("Total a pagar");
+  const riesgo = pick("Riesgo referencial", solicitud?.riesgo || solicitud?.risk_level || "No registrado");
+
+  const decisionPolicy = getDecisionPolicy(solicitud);
+  const areaResponsable = decisionPolicy.instancia;
+  const motivoRecomendacion =
+    pick("Motivo calculado por el sistema", "") ||
+    pick("Motivo de recomendacion", "") ||
+    decisionPolicy.motivo;
+
+  return (
+    <div style={{ display: "grid", gap: 14, marginTop: 4 }}>
+      <DetailSection title="Datos del titular">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 10 }}>
+          <DetailItem label="Cliente" value={cliente} />
+          <DetailItem label="DNI" value={dni} />
+          <DetailItem label="Correo" value={correo} />
+              <DetailItem label="Direccion registrada" value={direccionTitular} />
+        </div>
+      </DetailSection>
+
+      <DetailSection title="Evaluacion documental">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
+          <DetailItem label="Ubicacion" value={ubicacion} />
+          <DetailItem label="Tipo de ingreso" value={tipoIngreso} />
+          <DetailItem label="Categoria de renta" value={categoria} />
+          <DetailItem label="Situacion laboral" value={situacionLaboral} />
+          <DetailItem label="Antiguedad" value={antiguedad} />
+          <DetailItem label="Estado civil" value={estadoCivil} />
+          <DetailItem label="Seguro de desgravamen" value={seguroDesgravamen} />
+          <DetailItem label="Central de riesgo" value={centralRiesgo} />
+        </div>
+      </DetailSection>
+
+      <DetailSection title="Documentos requeridos">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {(documentos.length ? documentos : ["DNI del titular", "Sustento de ingresos", "Recibo de servicios", "Evaluacion crediticia interna"]).map((doc) => (
+            <span key={doc} style={{ padding: "8px 12px", borderRadius: 999, background: "#eaf3ff", border: "1px solid #cfe0ff", color: "#0047a0", fontWeight: 900 }}>
+              {doc}
+            </span>
+          ))}
+        </div>
+      </DetailSection>
+
+      <DetailSection title="Referencia de calculo y decision">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
+          <DetailItem label="TEA referencial" value={tea} />
+          <DetailItem label="TCEA referencial" value={tcea} />
+          <DetailItem label="Cuota estimada" value={cuota} />
+          <DetailItem label="RDS" value={rds} />
+          <DetailItem label="Total a pagar" value={total} />
+          <DetailItem label="Riesgo referencial" value={riesgo} />
+          <DetailItem label="Instancia de decision" value={areaResponsable} />
+        </div>
+
+        <div style={{ padding: "12px 14px", borderRadius: 14, border: "1px solid #cfe0ff", background: "#f8fbff", marginTop: 10 }}>
+          <span style={{ display: "block", color: "#64748b", fontSize: "0.78rem", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 5 }}>
+            Motivo calculado por el sistema
+          </span>
+          <p style={{ margin: 0, color: "#0f172a", fontWeight: 800, lineHeight: 1.45 }}>
+            {motivoRecomendacion}
+          </p>
+        </div>
+      </DetailSection>
+    </div>
+  );
+}
+
+function getConnectedRoleForDisplay() {
+  try {
+    const possibleKeys = [
+      "coreUser",
+      "core_user",
+      "currentUser",
+      "current_user",
+      "analystUser",
+      "analyst_user",
+      "analyst",
+      "user",
+      "authUser"
+    ];
+
+    for (const key of possibleKeys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+      const role =
+        parsed?.role ||
+        parsed?.rol ||
+        parsed?.cargo ||
+        parsed?.position_name ||
+        parsed?.position ||
+        "";
+
+      if (role) return role;
+    }
+  } catch (error) {
+    return "";
+  }
+
+  return "";
+}
+
+
+function formatCoreAreaLabel(value) {
+  const raw = String(value || "").toUpperCase();
+
+  if (raw.includes("ANALISTA_N1") || raw.includes("NIVEL 1")) {
+    return "Analista Nivel 1";
+  }
+
+  if (raw.includes("ANALISTA_N2") || raw.includes("NIVEL 2")) {
+    return "Analista Nivel 2";
+  }
+
+  if (raw.includes("ANALISTA_N3") || raw.includes("NIVEL 3")) {
+    return "Analista Nivel 3";
+  }
+
+  if (raw.includes("ADMIN_AGENCIA") || raw.includes("AGENCIA") || raw.includes("JEFE")) {
+    return "Jefatura de Agencia";
+  }
+
+  if (raw.includes("RIESGOS") || raw.includes("RIESGO")) {
+    return "Area de Riesgos";
+  }
+
+  if (raw.includes("COMITE")) {
+    return "Comite de Creditos";
+  }
+
+  if (raw.includes("GERENCIA")) {
+    return "Gerencia";
+  }
+
+  if (raw.includes("SENIOR")) {
+    return "Senior de Creditos";
+  }
+
+  if (raw.includes("ANALISTA")) {
+    return "Analista de Creditos";
+  }
+
+  return "Rol no registrado";
+}
+
+
+
+
+export default function Dashboard({ analyst, onLogout }) {
+  const [solicitudes, setSolicitudes] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!message) return;
+
+    const timer = setTimeout(() => {
+      setMessage("");
+    }, 3500);
+
+    return () => clearTimeout(timer);
+  }, [message]);
+  const [decisionModal, setDecisionModal] = useState(null);
+  const [decisionObservation, setDecisionObservation] = useState("");
+  const [decisionLoading, setDecisionLoading] = useState(false);
+  const [desembolsoLoading, setDesembolsoLoading] = useState(false);
+  const [decisionError, setDecisionError] = useState("");
+  const [estadoFiltro, setEstadoFiltro] = useState("todos");
+  const [desembolsoFiltro, setDesembolsoFiltro] = useState("todos");
+  const [desembolsoSearch, setDesembolsoSearch] = useState("");
+  const [desembolsoDateFrom, setDesembolsoDateFrom] = useState("");
+  const [desembolsoDateTo, setDesembolsoDateTo] = useState("");
+  const [search, setSearch] = useState("");
+  const [solicitudDateFrom, setSolicitudDateFrom] = useState("");
+  const [solicitudDateTo, setSolicitudDateTo] = useState("");
+  const [section, setSection] = useState("resumen");
+  const [recuperacionesResumen, setRecuperacionesResumen] = useState(null);
+  const [recuperacionesCasos, setRecuperacionesCasos] = useState([]);
+  const [recuperacionesFiltro, setRecuperacionesFiltro] = useState("TODAS");
+  const [recuperacionesLoading, setRecuperacionesLoading] = useState(false);
+  const [gestionLoading, setGestionLoading] = useState(false);
+  const [recoveryModal, setRecoveryModal] = useState(null);
+  const [recoveryComment, setRecoveryComment] = useState("");
+  const [recoveryHistory, setRecoveryHistory] = useState([]);
+  const [recoveryError, setRecoveryError] = useState("");
+  const [recoverySearch, setRecoverySearch] = useState("");
+  const [recoveryDateFrom, setRecoveryDateFrom] = useState("");
+  const [recoveryDateTo, setRecoveryDateTo] = useState("");
+
+  async function cargarSolicitudes(silent = false) {
+    try {
+      if (!silent) setLoading(true);
+      setMessage("");
+
+      const data = await getSolicitudes();
+      const lista = data.solicitudes || [];
+
+      setSolicitudes(lista);
+
+      if (!selected && lista.length > 0) {
+        setSelected(lista[0]);
+      }
+    } catch (error) {
+      setMessage("No se pudo conectar con el Core Financiero.");
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }
+
+  async function cargarRecuperaciones(banda = recuperacionesFiltro, silent = false) {
+    try {
+      if (!silent) setRecuperacionesLoading(true);
+
+      const [resumenData, carteraData] = await Promise.all([
+        getResumenRecuperaciones(),
+        getCarteraRecuperaciones(banda)
+      ]);
+
+      setRecuperacionesResumen(resumenData.resumen || null);
+      setRecuperacionesCasos(carteraData.casos || []);
+    } catch (error) {
+      setMessage("No se pudo cargar Recuperaciones/Mora desde el Core.");
+    } finally {
+      if (!silent) setRecuperacionesLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    cargarSolicitudes();
+  }, []);
+
+  useEffect(() => {
+    if (section === "recuperaciones") {
+      cargarRecuperaciones(recuperacionesFiltro);
+    }
+
+    if (section === "resumen" && !recuperacionesResumen) {
+      cargarRecuperaciones("TODAS");
+    }
+  }, [section, recuperacionesFiltro]);
+  // AUTOACTUALIZACION_OPERATIVA: refresca datos sin depender del boton Actualizar
+  useEffect(() => {
+    const AUTO_REFRESH_MS = 30000;
+
+    const intervalo = setInterval(() => {
+      cargarSolicitudes(true);
+
+      if (section === "recuperaciones" || section === "resumen") {
+        cargarRecuperaciones(recuperacionesFiltro, true);
+      }
+    }, AUTO_REFRESH_MS);
+
+    return () => clearInterval(intervalo);
+  }, [section, recuperacionesFiltro]);
+
+
+  const resumen = useMemo(() => {
+    const total = solicitudes.length;
+
+    const evaluacion = solicitudes.filter((s) =>
+      normalize(s.status).includes("evaluacion")
+    ).length;
+
+    const aprobadas = solicitudes.filter((s) =>
+      normalize(s.status).includes("aprobado")
+    ).length;
+
+    const rechazadas = solicitudes.filter((s) =>
+      normalize(s.status).includes("rechazado")
+    ).length;
+
+    const comite = solicitudes.filter((s) =>
+      normalize(s.status).includes("comite") || normalize(getRuta(s)).includes("comite")
+    ).length;
+
+    const desembolsadas = solicitudes.filter((s) =>
+      normalize(s.estado_desembolso) === "desembolsado"
+    ).length;
+
+    const riesgoAlto = solicitudes.filter((s) =>
+      normalize(s.scoring?.riesgo).includes("alto")
+    ).length;
+
+    const montoSolicitado = solicitudes.reduce((acc, s) => acc + Number(s.amount || 0), 0);
+
+    return {
+      total,
+      evaluacion,
+      aprobadas,
+      rechazadas,
+      comite,
+      desembolsadas,
+      riesgoAlto,
+      montoSolicitado
+    };
+  }, [solicitudes]);
+
+  const carteraDashboard = useMemo(() => {
+    const creditosActivos = solicitudes.filter((s) =>
+      normalize(s.estado_desembolso) === "desembolsado"
+    );
+
+    const montoDesembolsado = creditosActivos.reduce(
+      (acc, s) => acc + Number(s.amount || 0),
+      0
+    );
+
+    const saldoVencidoResumen = Number(recuperacionesResumen?.saldo_vencido_total || 0);
+    const saldoVencidoCasos = recuperacionesCasos.reduce(
+      (acc, caso) => acc + Number(caso.saldo_vencido || 0),
+      0
+    );
+
+    const carteraVencida = Math.max(saldoVencidoResumen || saldoVencidoCasos, 0);
+    const carteraVigente = Math.max(montoDesembolsado - carteraVencida, 0);
+    const carteraTotal = carteraVigente + carteraVencida;
+
+    const clientes = new Set();
+
+    creditosActivos.forEach((s) => {
+      const id = s.user_id || s.cliente_id || s.cliente_nombre;
+      if (id) clientes.add(String(id));
+    });
+
+    recuperacionesCasos.forEach((caso) => {
+      const id = caso.cliente_documento || caso.cliente_id || caso.cliente_nombre;
+      if (id) clientes.add(String(id));
+    });
+
+    const bajo = solicitudes.filter((s) => normalize(s.scoring?.riesgo).includes("bajo")).length;
+    const medio = solicitudes.filter((s) => normalize(s.scoring?.riesgo).includes("medio")).length;
+    const alto = solicitudes.filter((s) => normalize(s.scoring?.riesgo).includes("alto")).length;
+
+    const metaColocacion = 1000000;
+    const avanceMeta = metaColocacion > 0
+      ? Math.min((montoDesembolsado / metaColocacion) * 100, 100)
+      : 0;
+
+    return {
+      carteraTotal,
+      carteraVigente,
+      carteraVencida,
+      ratioMora: carteraTotal > 0 ? (carteraVencida / carteraTotal) * 100 : 0,
+      creditos: creditosActivos.length,
+      clientes: clientes.size,
+      montoDesembolsado,
+      metaColocacion,
+      avanceMeta,
+      bajo,
+      medio,
+      alto,
+      pctVigente: carteraTotal > 0 ? (carteraVigente / carteraTotal) * 100 : 0,
+      pctVencida: carteraTotal > 0 ? (carteraVencida / carteraTotal) * 100 : 0
+    };
+  }, [solicitudes, recuperacionesResumen, recuperacionesCasos]);
+
+  const analystRole = analyst?.role || "SIN_ROL";
+  const isAdminSupervisor = toRoleKey(analystRole) === "ADMIN";
+  const canExecuteDisbursement = toRoleKey(analystRole) === "ADMIN_AGENCIA";
+  const canManageRecoveries = toRoleKey(analystRole) === "RIESGOS";
+
+  const myAssigned = useMemo(() => {
+    const roleKey = toRoleKey(analystRole);
+
+    // ADMIN es supervision del sistema: ve toda la operacion, no una ruta normal de credito.
+    if (roleKey === "ADMIN") {
+      return [];
+    }
+
+    return solicitudes.filter((s) => {
+      const ruta = toRoleKey(getRuta(s));
+      return ruta === roleKey;
+    });
+  }, [solicitudes, analystRole]);
+
+  const myPending = myAssigned.filter((s) =>
+    normalize(s.status).includes("evaluacion")
+  ).length;
+
+  const myResolved = myAssigned.filter((s) => {
+    const st = normalize(s.status);
+    return st.includes("aprobado") || st.includes("rechazado");
+  }).length;
+
+  const myPendingAmount = myAssigned
+    .filter((s) => normalize(s.status).includes("evaluacion"))
+    .reduce((acc, s) => acc + Number(s.amount || 0), 0);
+
+  const myPriorityCases = solicitudes
+    .filter((s) => {
+      const riesgo = normalize(s.scoring?.riesgo);
+      const rds = Number(getRdsPercent(s) || 0);
+      const status = normalize(s.status);
+      return riesgo.includes("alto") || status.includes("comite") || rds >= 30;
+    })
+    .slice(0, 8);
+
+  const filtradas = useMemo(() => {
+    return solicitudes.filter((s) => {
+      const estado = normalize(s.status);
+            const texto = `
+        ${s.id}
+        ${s.solicitud_id}
+        solicitud ${s.id}
+        solicitud ${s.solicitud_id}
+        solicitud #${s.id}
+        solicitud #${s.solicitud_id}
+        credito ${s.id}
+        credito ${s.solicitud_id}
+        credito #${s.id}
+        credito #${s.solicitud_id}
+        ${s.cliente_nombre}
+        ${s.cliente_dni}
+        ${s.cliente_documento}
+        ${s.documento}
+        ${s.user_id}
+        ${s.cliente_id}
+        ${s.product}
+        ${s.producto}
+        ${s.purpose}
+        ${s.status}
+        ${s.estado_credito}
+        ${s.estado_desembolso}
+        ${getRuta(s)}
+        ${s.cargo_evaluador}
+      `.toLowerCase();
+
+      const cumpleBusqueda = texto.includes(search.toLowerCase());
+
+      const cumpleEstado =
+        estadoFiltro === "todos" ||
+        (estadoFiltro === "mis_pendientes" &&
+          estado.includes("evaluacion") &&
+          toRoleKey(getRuta(s)) === toRoleKey(analystRole)) ||
+        (estadoFiltro === "evaluacion" && estado.includes("evaluacion")) ||
+        (estadoFiltro === "aprobado" && estado.includes("aprobado")) ||
+        (estadoFiltro === "rechazado" && estado.includes("rechazado")) ||
+        (estadoFiltro === "comite" && estado.includes("comite"));
+
+      const fechaSolicitud = String(
+        s.created_at || s.fecha_solicitud || s.fecha_registro || ""
+      ).slice(0, 10);
+
+      const cumpleFechaDesde =
+        !solicitudDateFrom || (fechaSolicitud && fechaSolicitud >= solicitudDateFrom);
+
+      const cumpleFechaHasta =
+        !solicitudDateTo || (fechaSolicitud && fechaSolicitud <= solicitudDateTo);
+
+      return cumpleBusqueda && cumpleEstado && cumpleFechaDesde && cumpleFechaHasta;
+    });
+  }, [solicitudes, search, estadoFiltro, solicitudDateFrom, solicitudDateTo]);
+
+  const casosComite = useMemo(() => {
+    return solicitudes.filter((s) =>
+      normalize(s.status).includes("comite") || normalize(getRuta(s)).includes("comite")
+    );
+  }, [solicitudes]);
+
+  const casosDesembolso = useMemo(() => {
+    return solicitudes.filter((s) =>
+      normalize(s.status).includes("aprobado") || normalize(s.estado_desembolso) === "desembolsado"
+    );
+  }, [solicitudes]);
+
+  function getDecisionBaseObservation(decision) {
+    if (decision === "aprobado") {
+      return "Cliente con capacidad de pago favorable segun scoring interno, RDS aceptable y monto dentro de la autonomia del perfil.";
+    }
+
+    if (decision === "comite") {
+      return "Solicitud derivada a Comite de Creditos por monto, riesgo, RDS o autonomia insuficiente para decision individual.";
+    }
+
+    return "Solicitud rechazada por riesgo crediticio alto, capacidad de pago insuficiente o criterios internos no favorables.";
+  }
+
+  function getDecisionLabel(decision) {
+    if (decision === "aprobado") return "Aprobar solicitud";
+    if (decision === "comite") return "Derivar a comite";
+    return "Rechazar solicitud";
+  }
+
+  function getDecisionBaseObservation(decision) {
+    if (decision === "aprobado") {
+      return "Cliente con capacidad de pago favorable segun scoring interno, RDS aceptable y monto dentro de la autonomia del perfil.";
+    }
+
+    if (decision === "comite") {
+      return "Solicitud derivada a Comite de Creditos por monto, riesgo, RDS o autonomia insuficiente para decision individual.";
+    }
+
+    return "Solicitud rechazada por riesgo crediticio alto, capacidad de pago insuficiente o criterios internos no favorables.";
+  }
+
+  function getDecisionLabel(decision) {
+    if (decision === "aprobado") return "Aprobar solicitud";
+    if (decision === "comite") return "Derivar a comite";
+    return "Rechazar solicitud";
+  }
+
+  function decidir(solicitud, decision) {
+    setMessage("");
+    setDecisionError("");
+    setDecisionModal({ solicitud, decision });
+    setDecisionObservation("");
+  }
+
+  function cerrarDecisionModal() {
+    if (decisionLoading) return;
+    setDecisionModal(null);
+    setDecisionObservation("");
+    setDecisionError("");
+  }
+
+  async function confirmarDecision() {
+    if (!decisionModal) return;
+
+    const solicitud = decisionModal.solicitud;
+    const decision = decisionModal.decision;
+    const observacionFinal = decisionObservation.trim();
+
+    if (observacionFinal.length < 10) {
+      setDecisionError("Debes registrar un sustento valido antes de confirmar la decision crediticia.");
+      return;
+    }
+
+    try {
+      setDecisionLoading(true);
+
+      const data = await tomarDecision(
+        solicitud.id,
+        decision,
+        observacionFinal,
+        analyst
+      );
+
+      setMessage(data.mensaje || "Decision crediticia registrada correctamente. La solicitud fue actualizada en el Core Financiero.");
+      setSelected(data.solicitud || solicitud);
+
+      const actualizadas = await getSolicitudes();
+      setSolicitudes(actualizadas.solicitudes || []);
+
+      setDecisionModal(null);
+    setDecisionObservation("");
+    setDecisionError("");
+    } catch (error) {
+      setMessage("No se pudo registrar la decision. Verifica la conexion, el estado de la solicitud o la autonomia del perfil.");
+    } finally {
+      setDecisionLoading(false);
+    }
+  }
+
+  
+  async function confirmarDesembolso(solicitud) {
+    if (!canExecuteDisbursement) {
+      setMessage("Solo el perfil de Administrador de Agencia puede ejecutar desembolsos operativos.");
+      return;
+    }
+
+    if (!solicitud?.id) return;
+
+    const yaDesembolsado = normalize(solicitud.estado_desembolso) === "desembolsado";
+
+    if (yaDesembolsado) {
+      setMessage("Esta solicitud ya fue desembolsada.");
+      return;
+    }
+
+    if (!window.confirm(`Confirmas desembolsar el credito #${solicitud.id} por ${formatMoney(solicitud.amount)}? Esta operacion impactara el saldo y movimientos del cliente.`)) {
+      return;
+    }
+
+    try {
+      setDesembolsoLoading(true);
+      setMessage("");
+
+      const data = await desembolsarSolicitud(solicitud.id);
+
+      setMessage(data.mensaje || "Desembolso registrado correctamente. El cliente ya puede verlo en Homebanking.");
+
+      const actualizadas = await getSolicitudes();
+      const lista = actualizadas.solicitudes || [];
+
+      setSolicitudes(lista);
+
+      const actualizada = lista.find((item) => String(item.id) === String(solicitud.id));
+      if (actualizada) {
+        setSelected(actualizada);
+      }
+    } catch (error) {
+      const detalle = error?.response?.data?.detail;
+      setMessage(detalle || "No se pudo registrar el desembolso. Verifica que el credito este aprobado y no haya sido desembolsado antes.");
+    } finally {
+      setDesembolsoLoading(false);
+    }
+  }
+
+
+  function abrirModalGestion(caso) {
+    if (!canManageRecoveries) {
+      setMessage("Solo el area de Riesgos puede registrar gestiones de recuperacion.");
+      return;
+    }
+
+    setRecoveryModal({
+      tipo: "gestion",
+      caso,
+      titulo: "Registrar gestion de cobranza",
+      descripcion: "Registra una accion de cobranza para dejar evidencia en el historial del caso."
+    });
+    setRecoveryComment("");
+    setRecoveryHistory([]);
+    setRecoveryError("");
+  }
+
+  async function verHistorialRecuperacion(caso) {
+    if (!caso?.recovery_case_id) return;
+
+    try {
+      setGestionLoading(true);
+      const data = await getGestionesRecuperacion(caso.recovery_case_id);
+      const gestiones = data.gestiones || [];
+
+      setRecoveryHistory(gestiones);
+      setRecoveryModal({
+        tipo: "historial",
+        caso,
+        titulo: `Historial de gestiones - Caso #${caso.recovery_case_id}`,
+        descripcion: "Consulta de acciones registradas por el equipo de recuperaciones."
+      });
+      setRecoveryComment("");
+      setRecoveryError("");
+    } catch (error) {
+      setMessage("No se pudo consultar el historial de gestiones.");
+    } finally {
+      setGestionLoading(false);
+    }
+  }
+
+  function abrirModalJudicial(caso) {
+    if (!canManageRecoveries) {
+      setMessage("Solo el area de Riesgos puede derivar casos a cobranza judicial.");
+      return;
+    }
+
+    setRecoveryModal({
+      tipo: "judicial",
+      caso,
+      titulo: "Derivar a cobranza judicial",
+      descripcion: "Esta accion aplica cuando el caso cumple la regla de mora mayor o igual a 121 dias."
+    });
+    setRecoveryComment("");
+    setRecoveryHistory([]);
+    setRecoveryError("");
+  }
+
+  function abrirModalCastigo(caso) {
+    if (!canManageRecoveries) {
+      setMessage("Solo el area de Riesgos puede proponer castigos crediticios.");
+      return;
+    }
+
+    setRecoveryModal({
+      tipo: "castigo",
+      caso,
+      titulo: "Proponer castigo crediticio",
+      descripcion: "Esta accion aplica cuando el caso cumple la regla de mora mayor a 180 dias."
+    });
+    setRecoveryComment("");
+    setRecoveryHistory([]);
+    setRecoveryError("");
+  }
+
+  function cerrarRecoveryModal() {
+    if (gestionLoading) return;
+
+    setRecoveryModal(null);
+    setRecoveryComment("");
+    setRecoveryHistory([]);
+    setRecoveryError("");
+  }
+
+  async function confirmarRecoveryModal() {
+    if (!canManageRecoveries) {
+      setRecoveryError("Solo el area de Riesgos tiene permisos para registrar acciones de recuperacion.");
+      return;
+    }
+
+    if (!recoveryModal?.caso?.recovery_case_id) return;
+
+    const caso = recoveryModal.caso;
+    const comentario = recoveryComment.trim();
+
+    if (recoveryModal.tipo !== "historial" && !comentario) {
+      setRecoveryError("Ingresa una observacion para dejar evidencia de la accion.");
+      return;
+    }
+
+    try {
+      setGestionLoading(true);
+      setRecoveryError("");
+
+      let data;
+
+      if (recoveryModal.tipo === "gestion") {
+        data = await registrarGestionRecuperacion(caso.recovery_case_id, {
+          action_type: "Llamada de cobranza",
+          comment: comentario,
+          result: "Contacto exitoso",
+          status: "En gestion"
+        });
+      }
+
+      if (recoveryModal.tipo === "judicial") {
+        data = await derivarCasoJudicial(caso.recovery_case_id, comentario);
+      }
+
+      if (recoveryModal.tipo === "castigo") {
+        data = await castigarCasoRecuperacion(caso.recovery_case_id, comentario);
+      }
+
+      setMessage(data?.mensaje || "Accion de recuperaciones registrada correctamente.");
+      await cargarRecuperaciones(recuperacionesFiltro);
+      cerrarRecoveryModal();
+    } catch (error) {
+      const detalle = error?.response?.data?.detail;
+      setRecoveryError(detalle || "No se pudo registrar la accion. Verifica la regla de negocio del caso.");
+    } finally {
+      setGestionLoading(false);
+    }
+  }
+
+
+  function renderSolicitudesTable(lista = filtradas, compact = false) {
+    return (
+      <div className="table-wrap">
+        <table className="core-table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Producto / Monto</th>
+              <th>Score / RDS</th>
+              <th>Semaforo</th>
+              <th>Area responsable</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {lista.map((solicitud) => (
+              <tr
+                key={solicitud.id}
+                onClick={() => {
+                  setSelected(solicitud);
+                  if (!compact) setSection("evaluacion");
+                }}
+                className={selected?.id === solicitud.id ? "active-row" : ""}
+              >
+                <td>
+                  <strong>{getClientName(solicitud)}</strong>
+                  <small className="table-sub">Solicitud #{solicitud.id} - {getClientDocumentLabel(solicitud)}</small>
+                </td>
+
+                <td>
+                  <strong>{solicitud.product}</strong>
+                  <small className="table-sub">{formatMoney(solicitud.amount)}</small>
+                </td>
+
+                <td>
+                  <strong>{solicitud.scoring?.score ?? "-"}/100</strong>
+                  <small className="table-sub">RDS {getRdsPercent(solicitud).toFixed(2)}%</small>
+                </td>
+
+                <td>
+                  <RiskBadge risk={solicitud.scoring?.riesgo} />
+                </td>
+
+                <td>
+                  <span className="route-pill">{getRouteLabel(getRuta(solicitud))}</span>
+                </td>
+
+                <td>
+                  <StatusBadge status={solicitud.status} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  function renderDesembolsosTable(lista = []) {
+    return (
+      <div className="table-wrap">
+        <table className="core-table disbursement-table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Producto / Monto</th>
+              <th>Score / RDS</th>
+              <th>Area responsable</th>
+              <th>Estado credito</th>
+              <th>Desembolso</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {lista.map((solicitud) => {
+              const yaDesembolsado = normalize(solicitud.estado_desembolso) === "desembolsado";
+              const puedeDesembolsar =
+                normalize(solicitud.status).includes("aprobado") && !yaDesembolsado;
+
+              return (
+                <tr
+                  key={solicitud.id}
+                  onClick={() => setSelected(solicitud)}
+                  className={selected?.id === solicitud.id ? "active-row" : ""}
+                >
+                  <td>
+                    <strong>{getClientName(solicitud)}</strong>
+                    <small className="table-sub">Solicitud #{solicitud.id} - {getClientDocumentLabel(solicitud)}</small>
+                  </td>
+
+                  <td>
+                    <strong>{solicitud.product}</strong>
+                    <small className="table-sub">{formatMoney(solicitud.amount)}</small>
+                  </td>
+
+                  <td>
+                    <strong>{solicitud.scoring?.score ?? "-"}/100</strong>
+                    <small className="table-sub">RDS {getRdsPercent(solicitud).toFixed(2)}%</small>
+                  </td>
+
+                  <td>
+                    <span className="route-pill">{getRouteLabel(getRuta(solicitud))}</span>
+                  </td>
+
+                  <td>
+                    <StatusBadge status={solicitud.status} />
+                  </td>
+
+                  <td>
+                    <strong>{solicitud.estado_desembolso || "No desembolsado"}</strong>
+                  </td>
+
+                  <td>
+                    {puedeDesembolsar ? (
+                      <button
+                        type="button"
+                        className="refresh-btn"
+                        disabled={desembolsoLoading || !canExecuteDisbursement}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          confirmarDesembolso(solicitud);
+                        }}
+                      >
+                        {desembolsoLoading ? "Desembolsando..." : "Desembolsar ahora"}
+                      </button>
+                    ) : (
+                      <small className="table-sub">
+                        {yaDesembolsado ? "Ya desembolsado" : "No disponible"}
+                      </small>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+
+  function renderEvaluationCard() {
+    if (!selected) {
+      return <div className="empty">Selecciona una solicitud.</div>;
+    }
+
+    const cuotaEstimada = getCuotaEstimada(selected);
+    const rdsPercent = getRdsPercent(selected);
+    const recommendation = safeGetRecommendation(selected);
+    const autorizado = safeCanDecide(selected, analystRole);
+
+    return (
+      <div className="evaluation-view">
+        <div className="detail-top">
+          <div>
+            <p className="eyebrow">Solicitud #{selected.id}</p>
+            <h2>{selected.product}</h2>
+            <small>{getClientName(selected)}</small>
+            {(selected.purpose || selected.proposito) && (
+              <small>Proposito: {selected.purpose || selected.proposito}</small>
+            )}
+          </div>
+
+          <StatusBadge status={selected.status} />
+        </div>
+
+        <div className="score-box">
+          <ShieldCheck size={28} />
+
+          <div>
+            <span>Score crediticio</span>
+            <strong>{selected.scoring?.score ?? "-"}/100</strong>
+          </div>
+
+          <RiskBadge risk={selected.scoring?.riesgo} />
+        </div>
+
+        <div className="analysis-grid">
+          <div className="analysis-card">
+            <Gauge size={18} />
+            <span>Cuota estimada</span>
+            <strong>{formatMoney(cuotaEstimada)}</strong>
+          </div>
+
+          <div className="analysis-card">
+            <UserCheck size={18} />
+            <span>RDS cuota / ingreso</span>
+            <strong>{rdsPercent.toFixed(2)}%</strong>
+          </div>
+        </div>
+
+        <div className="info-grid">
+          <div>
+            <span>Monto solicitado</span>
+            <strong>{formatMoney(selected.amount)}</strong>
+          </div>
+
+          <div>
+            <span>Ingreso mensual</span>
+            <strong>{formatMoney(selected.monthly_income)}</strong>
+          </div>
+
+          <div>
+            <span>Plazo</span>
+            <strong>{selected.months} meses</strong>
+          </div>
+
+          <div>
+            <span>Fecha solicitud</span>
+            <strong>{formatDate(selected.created_at)}</strong>
+          </div>
+        </div>
+
+        <div className="banking-grid">
+          <div>
+            <span>Area responsable</span>
+            <strong>{getRouteLabel(getRuta(selected))}</strong>
+          </div>
+
+          <div>
+            <span>Nivel requerido</span><strong>{getApprovalLevelDisplay(selected)}</strong>
+          </div>
+
+          <div>
+            <span>Evaluado por</span>
+            <strong>{selected.evaluado_por || "Pendiente de decision"}</strong>
+          </div>
+
+          <div>
+            <span>Cargo evaluador</span>
+            <strong>{selected.cargo_evaluador || getRouteLabel(getRuta(selected))}</strong>
+          </div>
+
+          <div>
+            <span>Limite del area responsable</span><strong>{getAuthorityLimitDisplay(selected)}</strong>
+          </div>
+
+          <div>
+            <span>Desembolso</span>
+            <strong>{selected.estado_desembolso || "No desembolsado"}</strong>
+
+            {section === "desembolsos" &&
+              normalize(selected.status).includes("aprobado") &&
+              normalize(selected.estado_desembolso) !== "desembolsado" && (
+                <button
+                  type="button"
+                  className="refresh-btn"
+                  onClick={() => confirmarDesembolso(selected)}
+                  disabled={desembolsoLoading || !canExecuteDisbursement}
+                >
+                  {desembolsoLoading ? "Desembolsando..." : "Desembolsar ahora"}
+                </button>
+              )}
+          </div>
+        </div>
+
+        <div className="recommendation">
+          {recommendation === "APROBADO" ? (
+            <CheckCircle size={20} />
+          ) : (
+            <AlertTriangle size={20} />
+          )}
+
+          Recomendacion del sistema:
+          <strong>{recommendation}</strong>
+        </div>
+
+        <div className="purpose">
+          <span>Detalle tecnico de la solicitud</span>
+          <p>{renderTechnicalDetail(selected.analyst_comment || selected.comentario_analista || "", selected)}</p>
+        </div>
+
+        {!autorizado && !isFinalStatus(selected.status) && !isCommitteeStatus(selected.status) && (
+          <div className="locked-decision warning">
+            {isAdminSupervisor
+              ? "El administrador solo tiene permisos de supervision y consulta. No puede decidir solicitudes crediticias."
+              : toRoleKey(getRuta(selected)) !== toRoleKey(analyst?.role)
+                ? `Esta solicitud esta asignada a ${getRouteLabel(getRuta(selected))}. Tu perfil actual es ${getRoleLabel(analyst?.role)}, por eso no puedes decidirla desde esta ruta operativa. Solo podrias intervenir si el caso se escala o reasigna a tu nivel.`
+                : `Tu perfil actual, ${getRoleLabel(analyst?.role)}, no tiene autonomia suficiente para decidir esta solicitud por monto o politica interna. Debe ser revisada por un nivel superior.`}
+          </div>
+        )}
+
+        {isFinalStatus(selected.status) ? (
+          <div className="locked-decision">
+            Esta solicitud ya tiene decision registrada.
+          </div>
+        ) : isCommitteeStatus(selected.status) ? (
+          <div className="locked-decision committee">
+            Solicitud derivada a Comite de Creditos por monto o riesgo.
+          </div>
+        ) : (
+          <div className="action-row">
+            <button
+              className="approve-btn"
+              disabled={!autorizado || isAdminSupervisor}
+              onClick={() => decidir(selected, "aprobado")}
+            >
+              <CheckCircle size={18} />
+              Aprobar
+            </button>
+
+            <button
+              className="reject-btn"
+              disabled={!autorizado || isAdminSupervisor}
+              onClick={() => decidir(selected, "rechazado")}
+            >
+              <XCircle size={18} />
+              Rechazar
+            </button>
+
+            <button
+              className="committee-btn"
+              disabled={!autorizado || isAdminSupervisor}
+              onClick={() => decidir(selected, "comite")}
+            >
+              <AlertTriangle size={18} />
+              Derivar a comite
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderResumen() {
+    const faltanteMeta = Math.max(
+      carteraDashboard.metaColocacion - carteraDashboard.montoDesembolsado,
+      0
+    );
+
+    const riesgoTotal = Math.max(
+      carteraDashboard.bajo + carteraDashboard.medio + carteraDashboard.alto,
+      1
+    );
+
+    return (
+      <>
+        <section className="portfolio-kpis">
+          <StatCard
+            title="Cartera total del Core"
+            value={formatMoney(carteraDashboard.carteraTotal)}
+            subtitle="Vigente + vencida"
+          />
+          <StatCard
+            title="Vigente"
+            value={formatMoney(carteraDashboard.carteraVigente)}
+            subtitle="Capital sin atraso"
+          />
+          <StatCard
+            title="Vencida"
+            value={formatMoney(carteraDashboard.carteraVencida)}
+            subtitle="Saldo por recuperar"
+          />
+          <StatCard
+            title="Ratio de mora"
+            value={`${carteraDashboard.ratioMora.toFixed(1)}%`}
+            subtitle="Vencida / cartera total"
+          />
+          <StatCard
+            title="N creditos"
+            value={carteraDashboard.creditos}
+            subtitle="Creditos desembolsados"
+          />
+          <StatCard
+            title="Clientes"
+            value={carteraDashboard.clientes}
+            subtitle="Clientes con cartera"
+          />
+        </section>
+
+        <section className="panel portfolio-chart-panel">
+          <div className="panel-header">
+            <div>
+              <h2>Composicion de cartera del Core</h2>
+              <p>Vista global de cartera vigente y vencida registrada en el Core financiero.</p>
+            </div>
+
+            <div className="panel-counter">
+              <ClipboardList size={18} />
+              {carteraDashboard.creditos} creditos
+            </div>
+          </div>
+
+          <div className="clean-chart-layout">
+            <div className="pie-summary">
+              <div
+                className="simple-pie"
+                style={{
+                  background: `conic-gradient(
+                    #0f766e 0% ${carteraDashboard.pctVigente}%,
+                    #dc2626 ${carteraDashboard.pctVigente}% 100%
+                  )`,
+                }}
+              >
+                <div className="simple-pie-inner">
+                  <strong>{formatMoney(carteraDashboard.carteraTotal)}</strong>
+                  <span>Total cartera</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="portfolio-side-grid">
+              <div className="portfolio-metric-card vigente">
+                <div className="metric-left">
+                  <span className="dot vigente-dot" />
+                  <div>
+                    <strong>Vigente</strong>
+                    <small>{formatMoney(carteraDashboard.carteraVigente)}</small>
+                  </div>
+                </div>
+                <b>{carteraDashboard.pctVigente.toFixed(1)}%</b>
+              </div>
+
+              <div className="portfolio-metric-card vencida">
+                <div className="metric-left">
+                  <span className="dot vencida-dot" />
+                  <div>
+                    <strong>Vencida</strong>
+                    <small>{formatMoney(carteraDashboard.carteraVencida)}</small>
+                  </div>
+                </div>
+                <b>{carteraDashboard.pctVencida.toFixed(1)}%</b>
+              </div>
+
+              <div className="portfolio-note full-width">
+                <strong>Lectura operativa</strong>
+                <p>
+                  La cartera vencida alimenta el modulo de Mora y Recuperaciones.
+                  Los casos con 121 dias o mas pasan a judicial y los mayores a 180 dias
+                  pueden proponerse para castigo.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="dashboard-grid compact-dashboard-grid">
+          <div className="panel portfolio-goal-panel">
+            <div className="panel-header">
+              <div>
+                <h2>Cumplimiento de meta</h2>
+                <p>Avance de colocaciones desembolsadas frente a la meta operativa.</p>
+              </div>
+            </div>
+
+            <div className="goal-summary">
+              <div>
+                <span>Meta de colocaciones</span>
+                <strong>{formatMoney(carteraDashboard.metaColocacion)}</strong>
+              </div>
+
+              <div>
+                <span>Desembolsado</span>
+                <strong>{formatMoney(carteraDashboard.montoDesembolsado)}</strong>
+              </div>
+
+              <div>
+                <span>Faltante</span>
+                <strong>{formatMoney(faltanteMeta)}</strong>
+              </div>
+            </div>
+
+            <div className="goal-progress">
+              <div
+                className="goal-progress-fill"
+                style={{ width: `${carteraDashboard.avanceMeta}%` }}
+              />
+            </div>
+
+            <small className="goal-caption">
+              Avance actual: {carteraDashboard.avanceMeta.toFixed(1)}%
+            </small>
+          </div>
+
+          <div className="panel portfolio-risk-panel">
+            <div className="panel-header">
+              <div>
+                <h2>Cartera por riesgo</h2>
+                <p>Distribucion de solicitudes segun semaforo crediticio.</p>
+              </div>
+            </div>
+
+            <div className="risk-bars">
+              <div>
+                <span>Bajo</span>
+                <div className="risk-track">
+                  <b style={{ width: `${(carteraDashboard.bajo / riesgoTotal) * 100}%` }} />
+                </div>
+                <strong>{carteraDashboard.bajo}</strong>
+              </div>
+
+              <div>
+                <span>Medio</span>
+                <div className="risk-track">
+                  <b style={{ width: `${(carteraDashboard.medio / riesgoTotal) * 100}%` }} />
+                </div>
+                <strong>{carteraDashboard.medio}</strong>
+              </div>
+
+              <div>
+                <span>Alto</span>
+                <div className="risk-track danger">
+                  <b style={{ width: `${(carteraDashboard.alto / riesgoTotal) * 100}%` }} />
+                </div>
+                <strong>{carteraDashboard.alto}</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="dashboard-grid">
+          <div className="panel">
+            <div className="panel-header">
+              <div>
+                <h2>{toRoleKey(analystRole) === "ADMIN" ? "Supervision operativa" : "Mi bandeja operativa"}</h2>
+                <p>{toRoleKey(analystRole) === "ADMIN" ? "Vista general de solicitudes, decisiones y seguimiento del Core." : "Solicitudes y decisiones relacionadas al analista conectado."}</p>
+              </div>
+            </div>
+
+            <div className="quick-summary">
+              <StatusMini
+                label={isAdminSupervisor ? "Sin pendientes asignados" : "Pendientes asignados"}
+                value={toRoleKey(analystRole) === "ADMIN" ? 0 : myPending}
+              />
+              <StatusMini
+                label={isAdminSupervisor ? "Solicitudes supervisadas" : "Casos en seguimiento"}
+                value={isAdminSupervisor ? solicitudes.length : myAssigned.length}
+              />
+              <StatusMini
+                label={isAdminSupervisor ? "Decisiones propias" : "Decisiones registradas"}
+                value={isAdminSupervisor ? 0 : myResolved}
+              />
+              <StatusMini
+                label={isAdminSupervisor ? "Monto asignado" : "Monto pendiente asignado"}
+                value={isAdminSupervisor ? formatMoney(0) : formatMoney(myPendingAmount)}
+              />
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-header">
+              <div>
+                <h2>{toRoleKey(analystRole) === "ADMIN" ? "Control del sistema" : "Mi autonomia operativa"}</h2>
+                <p>{toRoleKey(analystRole) === "ADMIN" ? "Perfil de supervision tecnica y operativa del Core." : "Capacidad de aprobacion del analista conectado."}</p>
+              </div>
+            </div>
+
+            <div className="quick-summary">
+              <StatusMini label="Usuario" value={analyst?.full_name || "Analista"} />
+              <StatusMini label="Cargo" value={getRoleLabel(analyst?.role)} />
+              <StatusMini
+                label={isAdminSupervisor ? "Perfil interno" : "Rol operativo"}
+                value={isAdminSupervisor ? "Administrador del Sistema" : formatCoreAreaLabel(analyst?.role || analystRole || analyst?.position_name || analyst?.cargo)}
+              />
+              <StatusMini
+                label={isAdminSupervisor ? "Sesion" : "Autonomia"}
+                value={isAdminSupervisor ? "Activa" : formatMoney(getRoleLimit(analyst?.role))}
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <h2>Casos prioritarios</h2>
+              <p>Solicitudes con riesgo alto, comite o RDS elevado.</p>
+            </div>
+          </div>
+
+          {myPriorityCases.length === 0 ? (
+            <div className="empty">No hay casos prioritarios.</div>
+          ) : (
+            renderSolicitudesTable(myPriorityCases, true)
+          )}
+        </section>
+      </>
+    );
+  }
+
+
+  function renderSolicitudes() {
+    return (
+      <>
+        <section className="toolbar inbox-toolbar">
+          <div className="inbox-filter-header">
+            <div>
+              <strong>Filtros de bandeja</strong>
+              <span>Consulta por estado, responsable, cliente, producto y fecha de solicitud.</span>
+            </div>
+
+            <div className="filter-tabs">
+              <button type="button" className={estadoFiltro === "todos" ? "active-filter" : ""} onClick={() => setEstadoFiltro("todos")}>Todos</button>
+              <button type="button" className={estadoFiltro === "mis_pendientes" ? "active-filter" : ""} onClick={() => setEstadoFiltro("mis_pendientes")}>{isAdminSupervisor ? "Sin asignacion" : "Mis pendientes"}</button>
+              <button type="button" className={estadoFiltro === "evaluacion" ? "active-filter" : ""} onClick={() => setEstadoFiltro("evaluacion")}>En evaluacion</button>
+              <button type="button" className={estadoFiltro === "aprobado" ? "active-filter" : ""} onClick={() => setEstadoFiltro("aprobado")}>Aprobados</button>
+              <button type="button" className={estadoFiltro === "rechazado" ? "active-filter" : ""} onClick={() => setEstadoFiltro("rechazado")}>Rechazados</button>
+              <button type="button" className={estadoFiltro === "comite" ? "active-filter" : ""} onClick={() => setEstadoFiltro("comite")}>En comite</button>
+            </div>
+          </div>
+
+          <div className="inbox-extra-filters">
+            <div className="search-box inbox-search-box">
+              <Search size={18} />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar solicitud, cliente, DNI, producto, area responsable o estado..."
+              />
+            </div>
+
+            <label>
+              Desde
+              <input
+                type="date"
+                value={solicitudDateFrom}
+                onChange={(e) => setSolicitudDateFrom(e.target.value)}
+              />
+            </label>
+
+            <label>
+              Hasta
+              <input
+                type="date"
+                value={solicitudDateTo}
+                onChange={(e) => setSolicitudDateTo(e.target.value)}
+              />
+            </label>
+
+            <button
+              type="button"
+              className="clear-recovery-filters"
+              onClick={() => {
+                setSearch("");
+                setEstadoFiltro("todos");
+                setSolicitudDateFrom("");
+                setSolicitudDateTo("");
+              }}
+            >
+              Limpiar filtros
+            </button>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <h2>Bandeja de evaluacion crediticia</h2>
+              <p>Solicitudes asignadas por nivel de aprobacion, estado crediticio y area responsable.</p>
+            </div>
+
+            <div className="panel-counter">
+              <ClipboardList size={18} />
+              {filtradas.length} visibles
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="empty">Cargando solicitudes...</div>
+          ) : filtradas.length === 0 ? (
+            <div className="empty">No hay solicitudes con ese filtro.</div>
+          ) : (
+            renderSolicitudesTable(filtradas)
+          )}
+        </section>
+      </>
+    );
+  }
+
+  function renderComite() {
+    return (
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <h2>Comite de Creditos</h2>
+            <p>Vista de seguimiento de casos escalados por monto, riesgo, RDS elevado o excepcion crediticia. Para este perfil es una consulta de seguimiento.</p>
+          </div>
+
+          <div className="panel-counter">
+            <AlertTriangle size={18} />
+            {casosComite.length} casos
+          </div>
+        </div>
+
+        {casosComite.length === 0 ? (
+          <div className="empty">No hay casos en comite.</div>
+        ) : (
+          renderSolicitudesTable(casosComite)
+        )}
+      </section>
+    );
+  }
+
+  
+
+  function renderDesembolsos() {
+    const listaDesembolsosBase =
+      desembolsoFiltro === "mi_nivel"
+        ? casosDesembolso.filter((s) => toRoleKey(getRuta(s)) === toRoleKey(analystRole))
+        : casosDesembolso;
+
+    const listaDesembolsos = listaDesembolsosBase.filter((s) => {
+      const texto = normalize(`
+        ${s.id || ""}
+        ${s.solicitud_id || ""}
+        solicitud ${s.id || ""}
+        solicitud ${s.solicitud_id || ""}
+        solicitud #${s.id || ""}
+        solicitud #${s.solicitud_id || ""}
+        credito ${s.id || ""}
+        credito #${s.id || ""}
+        dni ${s.cliente_dni || s.cliente_documento || s.documento || ""}
+        ${s.cliente_dni || ""}
+        ${s.cliente_documento || ""}
+        ${s.documento || ""}
+        ${getClientName(s)}
+        ${s.cliente_nombre || ""}
+        ${s.product || ""}
+        ${s.producto || ""}
+        ${s.status || ""}
+        ${s.estado_credito || ""}
+        ${s.estado_desembolso || ""}
+        ${getRuta(s)}
+        ${s.cargo_evaluador || ""}
+      `);
+
+      const fechaDesembolso = String(
+        s.fecha_desembolso ||
+        s.disbursement_date ||
+        s.disbursed_at ||
+        s.fecha_evaluacion ||
+        s.fecha_solicitud ||
+        s.created_at ||
+        ""
+      ).slice(0, 10);
+
+      const busquedaOk = !desembolsoSearch.trim() || texto.includes(normalize(desembolsoSearch));
+      const desdeOk = !desembolsoDateFrom || (fechaDesembolso && fechaDesembolso >= desembolsoDateFrom);
+      const hastaOk = !desembolsoDateTo || (fechaDesembolso && fechaDesembolso <= desembolsoDateTo);
+
+      return busquedaOk && desdeOk && hastaOk;
+    });
+
+    const pendientesDesembolso = listaDesembolsos.filter(
+      (s) => normalize(s.status).includes("aprobado") && normalize(s.estado_desembolso) !== "desembolsado"
+    );
+
+    const desembolsados = listaDesembolsos.filter(
+      (s) => normalize(s.estado_desembolso) === "desembolsado"
+    );
+
+    const montoPendiente = pendientesDesembolso.reduce((acc, s) => acc + Number(s.amount || 0), 0);
+    const montoDesembolsado = desembolsados.reduce((acc, s) => acc + Number(s.amount || 0), 0);
+
+    return (
+      <>
+        <section className="toolbar disbursement-toolbar">
+          <div className="filter-tabs">
+            <button
+              className={desembolsoFiltro === "todos" ? "active-filter" : ""}
+              onClick={() => setDesembolsoFiltro("todos")}
+            >
+              Todos los creditos aprobados
+            </button>
+
+            <button
+              className={desembolsoFiltro === "mi_nivel" ? "active-filter" : ""}
+              onClick={() => setDesembolsoFiltro("mi_nivel")}
+            >
+              {isAdminSupervisor ? "Sin asignacion operativa" : "Casos en seguimiento"}
+            </button>
+          </div>
+
+          <div className="search-box inbox-search-box">
+            <Search size={18} />
+            <input
+              value={desembolsoSearch}
+              onChange={(e) => setDesembolsoSearch(e.target.value)}
+              placeholder="Buscar desembolso por solicitud, DNI, cliente, producto o estado..."
+            />
+          </div>
+          <label>
+            Desde
+            <input
+              type="date"
+              value={desembolsoDateFrom}
+              onChange={(e) => setDesembolsoDateFrom(e.target.value)}
+            />
+          </label>
+
+          <label>
+            Hasta
+            <input
+              type="date"
+              value={desembolsoDateTo}
+              onChange={(e) => setDesembolsoDateTo(e.target.value)}
+            />
+          </label>
+
+          <button
+            type="button"
+            className="clear-recovery-filters"
+            onClick={() => {
+              setDesembolsoSearch("");
+              setDesembolsoDateFrom("");
+              setDesembolsoDateTo("");
+            }}
+          >
+            Limpiar filtros
+          </button>
+
+        </section>
+
+        <section className="disbursement-kpis">
+          <div className="disbursement-kpi-card">
+            <span>Pendientes</span>
+            <strong>{pendientesDesembolso.length}</strong>
+            <small>Listos para ejecutar</small>
+          </div>
+
+          <div className="disbursement-kpi-card">
+            <span>Desembolsados</span>
+            <strong>{desembolsados.length}</strong>
+            <small>Operacion completada</small>
+          </div>
+
+          <div className="disbursement-kpi-card">
+            <span>Monto pendiente</span>
+            <strong>{formatMoney(montoPendiente)}</strong>
+            <small>Por acreditar al cliente</small>
+          </div>
+
+          <div className="disbursement-kpi-card">
+            <span>Monto desembolsado</span>
+            <strong>{formatMoney(montoDesembolsado)}</strong>
+            <small>Registrado en Homebanking</small>
+          </div>
+        </section>
+
+        <section className="panel desembolsos-panel">
+          <div className="panel-header">
+            <div>
+              <h2>Desembolsos</h2>
+              <p>Consulta de creditos aprobados y estado de desembolso. El analista realiza seguimiento; la ejecucion corresponde al area operativa.</p>
+            </div>
+
+            <div className="panel-counter">
+              <CheckCircle size={18} />
+              {listaDesembolsos.length} creditos
+            </div>
+          </div>
+
+          {listaDesembolsos.length === 0 ? (
+            <div className="empty">No hay desembolsos para este filtro.</div>
+          ) : (
+            renderDesembolsosTable(listaDesembolsos)
+          )}
+        </section>
+      </>
+    );
+  }
+
+
+  function renderRecuperaciones() {
+    const resumenMora = recuperacionesResumen || {
+      total_casos: 0,
+      saldo_vencido_total: 0,
+      gestion_activa: 0,
+      judicial: 0,
+      castigo: 0,
+      mora_critica: 0,
+      por_banda: {}
+    };
+
+    const bandas = ["TODAS", "Preventiva", "Temprana", "Tardia", "Judicial", "Castigo"];
+
+    const normalizarFecha = (value) => {
+      if (!value) return "";
+      return String(value).slice(0, 10);
+    };
+
+    const casosRecuperacionesVisibles = recuperacionesCasos.filter((caso) => {
+      const texto = normalize(
+        `
+        ${caso.cliente_nombre || ""}
+        dni ${caso.cliente_documento || ""}
+        ${caso.cliente_documento || ""}
+        caso ${caso.recovery_case_id || ""}
+        caso #${caso.recovery_case_id || ""}
+        recovery ${caso.recovery_case_id || ""}
+        solicitud ${caso.solicitud_id || ""}
+        solicitud #${caso.solicitud_id || ""}
+        credito ${caso.solicitud_id || ""}
+        credito #${caso.solicitud_id || ""}
+        ${caso.product || ""}
+        ${caso.banda || ""}
+        ${caso.estado_gestion || ""}
+        ${caso.asignado_a || ""}
+        `
+      );
+
+      const busquedaOk = !recoverySearch.trim() || texto.includes(normalize(recoverySearch));
+
+      const fechaCaso =
+        normalizarFecha(caso.ultima_gestion) ||
+        normalizarFecha(caso.updated_at) ||
+        normalizarFecha(caso.created_at);
+
+      const desdeOk = !recoveryDateFrom || (fechaCaso && fechaCaso >= recoveryDateFrom);
+      const hastaOk = !recoveryDateTo || (fechaCaso && fechaCaso <= recoveryDateTo);
+
+      return busquedaOk && desdeOk && hastaOk;
+    });
+
+    function limpiarFiltrosRecuperaciones() {
+      setRecoverySearch("");
+      setRecoveryDateFrom("");
+      setRecoveryDateTo("");
+      setRecuperacionesFiltro("TODAS");
+    }
+
+    return (
+      <>
+        <section className="stats-grid">
+          <StatCard title="Creditos en mora" value={resumenMora.total_casos} subtitle="Casos activos de mora" />
+          <StatCard title="Saldo vencido" value={formatMoney(resumenMora.saldo_vencido_total)} subtitle="Monto por recuperar" />
+          <StatCard title="Mora critica" value={resumenMora.mora_critica} subtitle="Desde 61 dias de atraso" />
+          <StatCard title="Judicial / Castigo" value={`${resumenMora.judicial} / ${resumenMora.castigo}`} subtitle="Judicializacion y castigo" />
+        </section>
+
+        <section className="toolbar recovery-toolbar">
+          <div>
+            <strong>Filtro por banda de mora</strong>
+            <span>Consulta por etapa de cobranza: Preventiva, Temprana, Tardia, Judicial y Castigo.</span>
+          </div>
+
+          <div className="filter-tabs">
+            {bandas.map((banda) => (
+              <button
+                key={banda}
+                type="button"
+                className={recuperacionesFiltro === banda ? "active" : ""}
+                onClick={() => setRecuperacionesFiltro(banda)}
+              >
+                {banda}
+              </button>
+            ))}
+          </div>
+
+          <div className="recovery-extra-filters">
+            <div className="recovery-search-box">
+              <Search size={16} />
+              <input
+                value={recoverySearch}
+                onChange={(event) => setRecoverySearch(event.target.value)}
+                placeholder="Buscar por cliente, DNI, caso, solicitud o producto..."
+              />
+            </div>
+
+            <label>
+              Desde
+              <input
+                type="date"
+                value={recoveryDateFrom}
+                onChange={(event) => setRecoveryDateFrom(event.target.value)}
+              />
+            </label>
+
+            <label>
+              Hasta
+              <input
+                type="date"
+                value={recoveryDateTo}
+                onChange={(event) => setRecoveryDateTo(event.target.value)}
+              />
+            </label>
+
+            <button
+              type="button"
+              className="clear-recovery-filters"
+              onClick={limpiarFiltrosRecuperaciones}
+            >
+              Limpiar filtros
+            </button>
+          </div>
+        </section>
+
+        <section className="panel recovery-panel">
+          <div className="panel-header">
+            <div>
+              <h2>Mora y recuperaciones</h2>
+              <p>Consulta de cartera vencida, historial de gestiones, derivacion judicial y propuesta de castigo segun dias de mora.</p>
+            </div>
+
+            <div className="panel-counter">
+              <AlertTriangle size={18} />
+              {casosRecuperacionesVisibles.length} visibles
+            </div>
+          </div>
+
+          {recuperacionesLoading ? (
+            <div className="empty">Cargando cartera de mora...</div>
+          ) : casosRecuperacionesVisibles.length === 0 ? (
+            <div className="empty">No hay creditos en mora para los filtros seleccionados.</div>
+          ) : (
+            <div className="table-wrap">
+              <table className="core-table recovery-table">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Credito / Saldo vencido</th>
+                    <th>Dias mora</th>
+                    <th>Banda</th>
+                    <th>Estado gestion</th>
+                    <th>Gestiones</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {casosRecuperacionesVisibles.map((caso) => {
+                    const dias = Number(caso.dias_mora || 0);
+                    const banda = normalize(caso.banda);
+                    const puedeJudicial =
+                      dias >= 121 && !banda.includes("judicial") && !banda.includes("castigo");
+                    const puedeCastigo = dias > 180 && !banda.includes("castigo");
+
+                    return (
+                      <tr key={caso.recovery_case_id}>
+                        <td>
+                          <strong>{caso.cliente_nombre}</strong>
+                          <small className="table-sub">DNI {caso.cliente_documento} - Caso #{caso.recovery_case_id}</small>
+                        </td>
+
+                        <td>
+                          <strong>{caso.product}</strong>
+                          <small className="table-sub">Vencido {formatMoney(caso.saldo_vencido)}</small>
+                        </td>
+
+                        <td>
+                          <strong>{dias} dias</strong>
+                          <small className="table-sub">Solicitud #{caso.solicitud_id}</small>
+                        </td>
+
+                        <td>
+                          <span className="route-pill">{caso.banda}</span>
+                        </td>
+
+                        <td>
+                          <StatusBadge status={caso.estado_gestion} />
+                          <small className="table-sub">Asignado: {caso.asignado_a || "Sin asignar"}</small>
+                        </td>
+
+                        <td>
+                          <strong>{caso.total_gestiones || 0}</strong>
+                          <small className="table-sub">
+                            Ultima: {caso.ultima_gestion ? formatDate(caso.ultima_gestion) : "Sin gestion"}
+                          </small>
+                        </td>
+
+                        <td>
+                          <div className="recovery-actions">
+                            <button
+                              type="button"
+                              className="mini-action-btn"
+                              disabled={gestionLoading || !canManageRecoveries}
+                              onClick={() => abrirModalGestion(caso)}
+                            >
+                              Gestionar
+                            </button>
+
+                            <button
+                              type="button"
+                              className="mini-action-btn"
+                              onClick={() => verHistorialRecuperacion(caso)}
+                            >
+                              Historial
+                            </button>
+
+                            {puedeJudicial && (
+                              <button
+                                type="button"
+                                className="mini-action-btn warning"
+                                disabled={gestionLoading || !canManageRecoveries}
+                                onClick={() => abrirModalJudicial(caso)}
+                              >
+                                Judicial
+                              </button>
+                            )}
+
+                            {puedeCastigo && (
+                              <button
+                                type="button"
+                                className="mini-action-btn danger"
+                                disabled={gestionLoading || !canManageRecoveries}
+                                onClick={() => abrirModalCastigo(caso)}
+                              >
+                                Castigo
+                              </button>
+                            )}
+
+                            {!puedeJudicial && !puedeCastigo && banda.includes("judicial") && (
+                              <small className="action-note">Ya judicializado</small>
+                            )}
+
+                            {!puedeJudicial && !puedeCastigo && banda.includes("castigo") && (
+                              <small className="action-note danger">En castigo</small>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </>
+    );
+  }
+
+  function renderAutonomia() {
+    const roleInfo = {
+      ANALISTA_N1: ["S/ 10,000", "Puede evaluar creditos simples, de bajo monto, bajo riesgo y RDS controlado."],
+      ANALISTA_N2: ["S/ 25,000", "Puede aprobar solicitudes de monto medio con bajo riesgo o riesgo moderado controlado."],
+      ANALISTA_N3: ["S/ 60,000", "Gestiona solicitudes de mayor monto, revision detallada o riesgo medio."],
+      ANALISTA_N4: ["S/ 100,000", "Atiende solicitudes complejas antes de escalar a Riesgos, Comite o Gerencia."],
+      SENIOR_CREDITOS: ["S/ 150,000", "Realiza revision avanzada de creditos, excepciones y casos especiales."],
+      ADMIN_AGENCIA: ["S/ 200,000", "Supervisa la operacion de agencia y el escalamiento operativo, sin reemplazar al Comite."],
+      RIESGOS: ["S/ 100,000", "Evalua casos de riesgo alto, excepciones y capacidad de pago sensible."],
+      GERENCIA: ["S/ 150,000", "Autoriza decisiones superiores dentro de la politica crediticia."],
+      COMITE: ["Sin limite demo", "Instancia colegiada para solicitudes de alto monto o riesgo relevante."],
+      ADMIN: ["Solo supervision", "Administra y monitorea el sistema. No aprueba, no desembolsa y no registra gestiones operativas."]
+    };
+
+    const info = roleInfo[analyst?.role] || ["No definido", "Rol interno sin autonomia configurada."];
+
+    return (
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <h2>{toRoleKey(analystRole) === "ADMIN" ? "Supervision del sistema" : "Mi autonomia crediticia"}</h2>
+            <p>{toRoleKey(analystRole) === "ADMIN" ? "Control tecnico, trazabilidad y monitoreo del Core financiero." : "Monto maximo autorizado, nivel operativo y reglas de escalamiento."}</p>
+          </div>
+        </div>
+
+        <div className="roles-grid">
+          <div className="role-card">
+            <strong>{getRoleLabel(analyst?.role)}</strong>
+            <span>{info[0]}</span>
+            <p>{info[1]}</p>
+          </div>
+
+          <div className="role-card">
+            <strong>Escalamiento a Comite</strong>
+            <span>Monto alto / riesgo relevante</span>
+            <p>Cuando el monto, riesgo o politica interna supera la autonomia individual.</p>
+          </div>
+
+          <div className="role-card">
+            <strong>Escalamiento a Riesgos</strong>
+            <span>Riesgo alto</span>
+            <p>Cuando el score, RDS o semaforo requiere revision especializada.</p>
+          </div>
+
+          <div className="role-card">
+            <strong>Decision permitida</strong>
+            <span>Segun nivel</span>
+            <p>El sistema restringe aprobaciones fuera del nivel autorizado.</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <main className="core-layout">
+      <aside className="core-sidebar">
+        <div className="sidebar-brand">
+          <div className="sidebar-logo">
+            <Building2 size={24} />
+          </div>
+          <div>
+            <strong>BanBif</strong>
+            <span>Core financiero</span>
+          </div>
+        </div>
+
+        <nav className="sidebar-nav sidebar-nav-grouped">
+          <div className="sidebar-group">
+            <span className="sidebar-group-title">General</span>
+
+            <button className={section === "resumen" ? "sidebar-link active" : "sidebar-link"} onClick={() => setSection("resumen")}>
+              <ClipboardList size={18} />
+              Inicio
+            </button>
+
+            <button className={section === "solicitudes" ? "sidebar-link active" : "sidebar-link"} onClick={() => setSection("solicitudes")}>
+              <ShieldCheck size={18} />
+              Bandeja
+            </button>
+          </div>
+
+          <div className="sidebar-group">
+            <span className="sidebar-group-title">Otorgamiento</span>
+
+            <button className={section === "evaluacion" ? "sidebar-link active" : "sidebar-link"} onClick={() => setSection("evaluacion")}>
+              <Gauge size={18} />
+              Evaluacion crediticia
+            </button>
+
+            <button className={section === "comite" ? "sidebar-link active" : "sidebar-link"} onClick={() => setSection("comite")}>
+              <AlertTriangle size={18} />
+              Comite de creditos
+            </button>
+
+            <button className={section === "desembolsos" ? "sidebar-link active" : "sidebar-link"} onClick={() => setSection("desembolsos")}>
+              <CheckCircle size={18} />
+              Desembolsos
+            </button>
+          </div>
+
+          <div className="sidebar-group">
+            <span className="sidebar-group-title">Cartera</span>
+
+            <button className={section === "recuperaciones" ? "sidebar-link active" : "sidebar-link"} onClick={() => setSection("recuperaciones")}>
+              <AlertTriangle size={18} />
+              Recuperaciones
+            </button>
+          </div>
+
+          <div className="sidebar-group">
+            <span className="sidebar-group-title">Control</span>
+
+            <button className={section === "autonomia" ? "sidebar-link active" : "sidebar-link"} onClick={() => setSection("autonomia")}>
+              <UserCheck size={18} />
+              Autonomia
+            </button>
+          </div>
+        </nav>
+
+        <div className="sidebar-user">
+          <span>Analista conectado</span>
+          <strong>{analyst?.full_name || "Analista"}</strong>
+          <small>{getRoleLabel(analyst?.role)}</small>
+        </div>
+
+        <button className="sidebar-logout" onClick={onLogout}>
+          <LogOut size={17} />
+          Salir
+        </button>
+      </aside>
+
+      <section className="core-shell">
+        <section className="hero">
+          <div className="hero-left">
+            <div className="brand-mark">
+              <Building2 size={28} />
+            </div>
+
+            <div>
+              <p className="eyebrow">BanBif</p>
+              <h1>
+                {section === "resumen" && "Panel operativo crediticio"}
+                {section === "solicitudes" && "Bandeja de evaluacion crediticia"}
+                {section === "evaluacion" && "Evaluacion crediticia"}
+                {section === "comite" && "Comite de creditos"}
+                {section === "desembolsos" && "Control de desembolsos"}
+                {section === "recuperaciones" && "Mora y recuperaciones"}
+                {section === "autonomia" && "Mi autonomia crediticia"}
+              </h1>
+              <p>
+                Gestion interna de solicitudes, evaluacion crediticia, escalamiento y seguimiento operativo.
+              </p>
+            </div>
+          </div>
+
+          <div className="hero-actions">
+            
+            
+            <div className="connection-pill">
+              <span></span>
+              Sesion interna activa
+            </div>
+
+            <div className="analyst-pill">
+              {analyst?.full_name || "Analista"} - {getRoleLabel(analyst?.role)}
+            </div>
+
+            <button className="refresh-btn" onClick={cargarSolicitudes}>
+              <RefreshCcw size={18} />
+              Actualizar
+            </button>
+          </div>
+        </section>
+        {toRoleKey(analystRole) !== "ADMIN" && myPending > 0 && !(section === "solicitudes" && estadoFiltro === "mis_pendientes") && (
+          <button
+            type="button"
+            className="pending-work-card"
+            onClick={() => {
+              setSection("solicitudes");
+              setEstadoFiltro("mis_pendientes");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          >
+            <div>
+              <span>Bandeja operativa</span>
+              <strong>
+                Tienes {myPending} {myPending === 1 ? "solicitud pendiente" : "solicitudes pendientes"}
+              </strong>
+              <small>{toRoleKey(analystRole) === "ADMIN" ? "Vista de supervision general del Core." : "Click para revisar tus pendientes asignados."}</small>
+            </div>
+            <b>{toRoleKey(analystRole) === "ADMIN" ? "Supervisar" : "Ver pendientes"}</b>
+          </button>
+        )}
+
+        {message && <div className="notice">{message}</div>}
+        {recoveryModal && (
+          <div className="modal-backdrop">
+            <div className="decision-modal recovery-modal">
+              <div className="modal-header">
+                <div>
+                  <span className="modal-eyebrow">Recuperaciones / Mora</span>
+                  <h3>{recoveryModal.titulo}</h3>
+                  <p>{recoveryModal.descripcion}</p>
+                </div>
+
+                <button
+                  type="button"
+                  className="modal-close-btn icon-close"
+                  onClick={cerrarRecoveryModal}
+                  disabled={gestionLoading}
+                  aria-label="Cerrar modal"
+                >
+                  X
+                </button>
+              </div>
+
+              <div className="recovery-case-summary">
+                <div>
+                  <span>Cliente</span>
+                  <strong>{recoveryModal.caso?.cliente_nombre}</strong>
+                </div>
+
+                <div>
+                  <span>Caso</span>
+                  <strong>#{recoveryModal.caso?.recovery_case_id}</strong>
+                </div>
+
+                <div>
+                  <span>Dias mora</span>
+                  <strong>{recoveryModal.caso?.dias_mora} dias</strong>
+                </div>
+
+                <div>
+                  <span>Banda</span>
+                  <strong>{recoveryModal.caso?.banda}</strong>
+                </div>
+              </div>
+
+              {recoveryModal.tipo === "historial" ? (
+                <div className="recovery-history-box">
+                  {recoveryHistory.length === 0 ? (
+                    <div className="empty">Este caso aun no tiene gestiones registradas.</div>
+                  ) : (
+                    recoveryHistory.map((gestion) => (
+                      <article key={gestion.id} className="history-item">
+                        <div>
+                          <strong>{gestion.action_type}</strong>
+                          <span>{gestion.result || "Sin resultado"}</span>
+                        </div>
+
+                        <p>{gestion.comment || "Sin comentario registrado."}</p>
+
+                        <small>
+                          {gestion.creado_por || "Usuario interno"} - {formatDate(gestion.created_at)}
+                        </small>
+                      </article>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <label className="modal-field">
+                  Observacion / sustento
+                  <textarea
+                    value={recoveryComment}
+                    onChange={(event) => setRecoveryComment(event.target.value)}
+                    rows={5}
+                    placeholder="Describe el sustento de la accion..."
+                  />
+                </label>
+              )}
+
+              {recoveryError && <div className="login-error">{recoveryError}</div>}
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="modal-secondary"
+                  onClick={cerrarRecoveryModal}
+                  disabled={gestionLoading}
+                >
+                  {recoveryModal.tipo === "historial" ? "Cerrar" : "Cancelar"}
+                </button>
+
+                {recoveryModal.tipo !== "historial" && (
+                  <button
+                    type="button"
+                    className={
+                      recoveryModal.tipo === "castigo"
+                        ? "modal-reject"
+                        : recoveryModal.tipo === "judicial"
+                          ? "modal-warning"
+                          : "modal-approve"
+                    }
+                    onClick={confirmarRecoveryModal}
+                    disabled={gestionLoading || !canManageRecoveries}
+                  >
+                    {gestionLoading
+                      ? "Registrando..."
+                      : recoveryModal.tipo === "gestion"
+                        ? "Registrar gestion"
+                        : recoveryModal.tipo === "judicial"
+                          ? "Derivar a judicial"
+                          : "Proponer castigo"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {decisionModal && (
+          <div className="decision-overlay">
+            <div className="decision-modal">
+              <div className="decision-modal-header">
+                <div>
+                  <span>Decision crediticia</span>
+                  <h3>{getDecisionLabel(decisionModal.decision)}</h3>
+                  <p>
+                    Solicitud #{decisionModal.solicitud.id} - {getClientName(decisionModal.solicitud)}
+                  </p>
+                </div>
+
+                <button className="modal-close" onClick={cerrarDecisionModal} aria-label="Cerrar modal">
+                  Cerrar
+                </button>
+              </div>
+
+              <div className="decision-summary">
+                <div>
+                  <span>Producto</span>
+                  <strong>{decisionModal.solicitud.product}</strong>
+                </div>
+
+                <div>
+                  <span>Monto</span>
+                  <strong>{formatMoney(decisionModal.solicitud.amount)}</strong>
+                </div>
+
+                <div>
+                  <span>Score</span>
+                  <strong>{decisionModal.solicitud.scoring?.score ?? "-"}/100</strong>
+                </div>
+
+                <div>
+                  <span>Area responsable</span>
+                  <strong>{getRouteLabel(getRuta(decisionModal.solicitud))}</strong>
+                </div>
+              </div>
+
+              <label className="decision-textarea-label">
+                Sustento de la decision
+                <textarea
+                  value={decisionObservation}
+                  onChange={(e) => setDecisionObservation(e.target.value)}
+                  placeholder="Ejemplo: Cliente con score aceptable, RDS dentro del rango permitido y monto dentro de la autonomia del perfil."
+                  rows={5}
+                />
+              </label>
+
+              {decisionError && (
+                <div className="decision-error">
+                  {decisionError}
+                </div>
+              )}
+
+              <div className="decision-modal-actions">
+                <button className="modal-cancel" onClick={cerrarDecisionModal}>
+                  Cancelar
+                </button>
+
+                <button
+                  className={
+                    decisionModal.decision === "aprobado"
+                      ? "modal-approve"
+                      : decisionModal.decision === "comite"
+                      ? "modal-committee"
+                      : "modal-reject"
+                  }
+                  onClick={confirmarDecision}
+                  disabled={decisionLoading}
+                >
+                  {decisionLoading ? "Registrando..." : getDecisionLabel(decisionModal.decision)}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {section === "resumen" && renderResumen()}
+        {section === "solicitudes" && renderSolicitudes()}
+        {section === "evaluacion" && renderEvaluationCard()}
+        {section === "comite" && renderComite()}
+        {section === "desembolsos" && renderDesembolsos()}
+        {section === "recuperaciones" && renderRecuperaciones()}
+        {section === "autonomia" && renderAutonomia()}
+      </section>
+    </main>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

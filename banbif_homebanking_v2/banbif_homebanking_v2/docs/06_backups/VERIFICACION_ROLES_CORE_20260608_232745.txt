@@ -1,0 +1,49 @@
+﻿===============================================
+VERIFICACION DE ROLES CORE - 20260608_232745
+===============================================
+
+=== 1. VALIDAR BUILD FRONTEND ===
+
+=== 2. VALIDAR BACKEND PYTHON ===
+PASS | Backend py_compile correcto
+
+=== 3. LOGIN DE USUARIOS INTERNOS ===
+PASS | Login admin.core | Rol=ADMIN
+PASS | Login admin.agencia | Rol=ADMIN_AGENCIA
+PASS | Login ana.rojas | Rol=ANALISTA_N1
+REVISAR | Login luis.paredes fallo | {"detail":"Credenciales internas incorrectas."}
+REVISAR | Login jorge.medina fallo | {"detail":"Credenciales internas incorrectas."}
+REVISAR | Login comite.creditos fallo | {"detail":"Credenciales internas incorrectas."}
+REVISAR | Login gerencia.finanzas fallo | {"detail":"Credenciales internas incorrectas."}
+
+=== 4. CONSULTA GENERAL DE SOLICITUDES ===
+PASS | GET solicitudes con admin | STATUS=200 | OK
+REVISAR | GET solicitudes con agencia | STATUS=403 | {"detail":"No tienes permisos para realizar esta accion."}
+PASS | GET solicitudes con ana | STATUS=200 | OK
+
+=== 5. DECISION CREDITICIA ===
+Nota: usamos solicitud falsa 999999999 para no modificar datos reales.
+PASS | ADMIN no debe decidir creditos | STATUS=403 | {"detail":"No tienes permisos para realizar esta accion."}
+PASS | ADMIN_AGENCIA no debe decidir creditos | STATUS=403 | {"detail":"No tienes permisos para realizar esta accion."}
+PASS | ANALISTA puede llegar a ruta decision | STATUS=404 | {"detail":"Solicitud no encontrada"}
+
+=== 6. DESEMBOLSOS ===
+Regla esperada: solo ADMIN_AGENCIA puede ejecutar desembolsos.
+PASS | ADMIN no debe desembolsar | STATUS=403 | {"detail":"No tienes permisos para realizar esta accion."}
+PASS | ANALISTA no debe desembolsar | STATUS=403 | {"detail":"No tienes permisos para realizar esta accion."}
+PASS | ADMIN_AGENCIA si puede llegar a ruta desembolso | STATUS=404 | {"detail":"Solicitud no encontrada"}
+
+=== 7. RECUPERACIONES ===
+Regla esperada: todos pueden consultar; solo RIESGOS gestiona/judicializa/castiga.
+PASS | GET recuperaciones resumen con admin | STATUS=200 | OK
+PASS | GET recuperaciones resumen con agencia | STATUS=200 | OK
+PASS | GET recuperaciones resumen con ana | STATUS=200 | OK
+PASS | ADMIN no debe registrar gestion | STATUS=403 | {"detail":"No tienes permisos para realizar esta accion."}
+PASS | ANALISTA no debe registrar gestion | STATUS=403 | {"detail":"No tienes permisos para realizar esta accion."}
+PASS | ADMIN_AGENCIA no debe registrar gestion | STATUS=403 | {"detail":"No tienes permisos para realizar esta accion."}
+
+===============================================
+VERIFICACION TERMINADA
+Reporte generado en:
+.\docs\05_pruebas_evidencias\salidas\VERIFICACION_ROLES_CORE_20260608_232745.txt
+===============================================

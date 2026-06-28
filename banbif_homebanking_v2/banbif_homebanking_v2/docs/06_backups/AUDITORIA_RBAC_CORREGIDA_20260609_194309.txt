@@ -1,0 +1,27 @@
+﻿====================================================
+ AUDITORIA RBAC CORREGIDA - RUTAS REALES
+====================================================
+
+=== 1. Login de roles ===
+PASS | Login maria.n1 | esperado: JWT | Token recibido
+PASS | Login jorge.riesgos | esperado: JWT | Token recibido
+
+=== 2. Obteniendo casos desde BD ===
+{
+  "tardia_case_id": 11,
+  "judicial_case_id": 12
+}
+
+=== 3. Prueba sin token ===
+PASS | GET recuperaciones sin token | esperado: 401/403 | Bloqueado STATUS=401
+
+=== 4. Prueba judicializar con rol incorrecto ===
+PASS | maria.n1 intenta judicializar | esperado: 403 | Bloqueado correctamente STATUS=403
+
+=== 5. Prueba castigar con rol incorrecto ===
+PASS | maria.n1 intenta castigar | esperado: 403 | Bloqueado correctamente STATUS=403
+
+====================================================
+ REPORTE GENERADO:
+C:\Users\Lenovo\Desktop\banbif_homebanking_v2\docs\05_pruebas_evidencias\salidas\AUDITORIA_RBAC_CORREGIDA_20260609_194309.txt
+====================================================
