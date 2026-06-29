@@ -28,6 +28,7 @@ if not cors_origins:
         "http://localhost:5174",
         "http://127.0.0.1:5174",
         "https://core-financiero-frontend.vercel.app",
+        "https://core-financiero-frontend-raex4cbys-banbif-practica.vercel.app",
     ]
 
 
